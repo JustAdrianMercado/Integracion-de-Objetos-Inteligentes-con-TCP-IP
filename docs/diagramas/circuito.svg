@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="titulo descripcion">
+  <title id="titulo">Esquema de cableado del ESP32, HC-SR04 y tres LEDs</title>
+  <desc id="descripcion">Conexiones de alimentación, disparo, divisor resistivo de ECHO y tres ramas de LEDs con resistencias de 220 ohmios.</desc>
+
+  <defs>
+    <style>
+      .fondo { fill: #ffffff; }
+      .componente { fill: #f5f7fa; stroke: #263238; stroke-width: 3; }
+      .sensor { fill: #e8f1fb; stroke: #245b8a; stroke-width: 3; }
+      .titulo { fill: #17202a; font: 700 30px Arial, sans-serif; }
+      .subtitulo { fill: #37474f; font: 700 21px Arial, sans-serif; }
+      .texto { fill: #263238; font: 18px Arial, sans-serif; }
+      .texto-pequeno { fill: #455a64; font: 15px Arial, sans-serif; }
+      .pin { fill: #ffffff; stroke: #455a64; stroke-width: 2; }
+      .resistencia { fill: #fff8e1; stroke: #6d4c41; stroke-width: 3; }
+      .cable-alimentacion { fill: none; stroke: #d32f2f; stroke-width: 4; }
+      .cable-tierra { fill: none; stroke: #263238; stroke-width: 4; }
+      .cable-disparo { fill: none; stroke: #1565c0; stroke-width: 4; }
+      .cable-eco { fill: none; stroke: #ef6c00; stroke-width: 4; }
+      .cable-verde { fill: none; stroke: #2e7d32; stroke-width: 4; }
+      .cable-amarillo { fill: none; stroke: #c9a000; stroke-width: 4; }
+      .cable-rojo { fill: none; stroke: #c62828; stroke-width: 4; }
+      .nodo { fill: #ef6c00; }
+      .led-verde { fill: #43a047; stroke: #1b5e20; stroke-width: 3; }
+      .led-amarillo { fill: #fdd835; stroke: #8d6e00; stroke-width: 3; }
+      .led-rojo { fill: #e53935; stroke: #8e0000; stroke-width: 3; }
+      .nota { fill: #fffde7; stroke: #8d6e00; stroke-width: 2; }
+    </style>
+  </defs>
+
+  <rect class="fondo" width="1600" height="1000"/>
+  <text class="titulo" x="800" y="48" text-anchor="middle">Circuito real — sensor ultrasónico y LEDs</text>
+  <text class="texto-pequeno" x="800" y="76" text-anchor="middle">Todas las conexiones comparten GND</text>
+
+  <!-- ESP32 -->
+  <rect class="componente" x="70" y="110" width="360" height="770" rx="18"/>
+  <text class="subtitulo" x="250" y="155" text-anchor="middle">ESP32 / ESP-WROOM-32</text>
+
+  <rect class="pin" x="350" y="190" width="80" height="38"/>
+  <text class="texto" x="390" y="216" text-anchor="middle">VIN</text>
+  <rect class="pin" x="350" y="250" width="80" height="38"/>
+  <text class="texto" x="390" y="276" text-anchor="middle">GND</text>
+  <rect class="pin" x="350" y="330" width="80" height="38"/>
+  <text class="texto" x="390" y="356" text-anchor="middle">GPIO5</text>
+  <rect class="pin" x="350" y="420" width="80" height="38"/>
+  <text class="texto" x="390" y="446" text-anchor="middle">GPIO18</text>
+  <rect class="pin" x="350" y="600" width="80" height="38"/>
+  <text class="texto" x="390" y="626" text-anchor="middle">GPIO25</text>
+  <rect class="pin" x="350" y="700" width="80" height="38"/>
+  <text class="texto" x="390" y="726" text-anchor="middle">GPIO26</text>
+  <rect class="pin" x="350" y="800" width="80" height="38"/>
+  <text class="texto" x="390" y="826" text-anchor="middle">GPIO27</text>
+
+  <!-- HC-SR04 -->
+  <rect class="sensor" x="1170" y="110" width="350" height="300" rx="18"/>
+  <text class="subtitulo" x="1345" y="152" text-anchor="middle">HC-SR04</text>
+  <circle cx="1290" cy="210" r="48" fill="#cfd8dc" stroke="#546e7a" stroke-width="4"/>
+  <circle cx="1400" cy="210" r="48" fill="#cfd8dc" stroke="#546e7a" stroke-width="4"/>
+  <text class="texto-pequeno" x="1345" y="281" text-anchor="middle">Transductores ultrasónicos</text>
+
+  <rect class="pin" x="1170" y="170" width="82" height="34"/>
+  <text class="texto-pequeno" x="1211" y="193" text-anchor="middle">VCC</text>
+  <rect class="pin" x="1170" y="230" width="82" height="34"/>
+  <text class="texto-pequeno" x="1211" y="253" text-anchor="middle">GND</text>
+  <rect class="pin" x="1170" y="300" width="82" height="34"/>
+  <text class="texto-pequeno" x="1211" y="323" text-anchor="middle">TRIG</text>
+  <rect class="pin" x="1170" y="360" width="82" height="34"/>
+  <text class="texto-pequeno" x="1211" y="383" text-anchor="middle">ECHO</text>
+
+  <!-- Alimentación y TRIG -->
+  <path class="cable-alimentacion" d="M430 209 H1080 V187 H1170"/>
+  <text class="texto-pequeno" x="760" y="197" text-anchor="middle">5 V</text>
+  <path class="cable-tierra" d="M350 269 H35 V930"/>
+  <path class="cable-tierra" d="M1252 247 H1550 V930"/>
+  <path class="cable-disparo" d="M430 349 H1100 V317 H1170"/>
+  <text class="texto-pequeno" x="760" y="339" text-anchor="middle">TRIG</text>
+
+  <!-- Divisor resistivo de ECHO -->
+  <path class="cable-eco" d="M1170 377 H1090"/>
+  <rect class="resistencia" x="930" y="357" width="160" height="40" rx="5"/>
+  <text class="texto" x="1010" y="384" text-anchor="middle">2.2 kΩ</text>
+  <path class="cable-eco" d="M930 377 H820 V439 H430"/>
+  <circle class="nodo" cx="820" cy="377" r="8"/>
+  <text class="texto-pequeno" x="805" y="420" text-anchor="end">Nodo GPIO18</text>
+
+  <path class="cable-eco" d="M820 377 V420"/>
+  <rect class="resistencia" x="760" y="420" width="120" height="45" rx="5"/>
+  <text class="texto" x="820" y="449" text-anchor="middle">2.2 kΩ</text>
+  <path class="cable-eco" d="M820 465 V480"/>
+  <rect class="resistencia" x="760" y="480" width="120" height="45" rx="5"/>
+  <text class="texto" x="820" y="509" text-anchor="middle">2.2 kΩ</text>
+  <path class="cable-tierra" d="M820 525 V550 H1100 V930"/>
+
+  <rect class="nota" x="930" y="445" width="470" height="76" rx="9"/>
+  <text class="texto" x="1165" y="476" text-anchor="middle">Divisor de ECHO</text>
+  <text class="texto-pequeno" x="1165" y="502" text-anchor="middle">5 V → tensión ideal aproximada de 3.33 V</text>
+
+  <!-- Ramas de los LEDs -->
+  <path class="cable-verde" d="M430 619 H610"/>
+  <circle class="led-verde" cx="650" cy="619" r="28"/>
+  <text class="texto-pequeno" x="650" y="625" text-anchor="middle" fill="#ffffff">LED</text>
+  <path class="cable-verde" d="M678 619 H720"/>
+  <rect class="resistencia" x="720" y="596" width="150" height="46" rx="5"/>
+  <text class="texto" x="795" y="626" text-anchor="middle">220 Ω</text>
+  <path class="cable-tierra" d="M870 619 H950 V930"/>
+  <text class="texto-pequeno" x="650" y="665" text-anchor="middle">LED verde</text>
+
+  <path class="cable-amarillo" d="M430 719 H610"/>
+  <circle class="led-amarillo" cx="650" cy="719" r="28"/>
+  <text class="texto-pequeno" x="650" y="725" text-anchor="middle">LED</text>
+  <path class="cable-amarillo" d="M678 719 H720"/>
+  <rect class="resistencia" x="720" y="696" width="150" height="46" rx="5"/>
+  <text class="texto" x="795" y="726" text-anchor="middle">220 Ω</text>
+  <path class="cable-tierra" d="M870 719 H950 V930"/>
+  <text class="texto-pequeno" x="650" y="765" text-anchor="middle">LED amarillo</text>
+
+  <path class="cable-rojo" d="M430 819 H610"/>
+  <circle class="led-rojo" cx="650" cy="819" r="28"/>
+  <text class="texto-pequeno" x="650" y="825" text-anchor="middle" fill="#ffffff">LED</text>
+  <path class="cable-rojo" d="M678 819 H720"/>
+  <rect class="resistencia" x="720" y="796" width="150" height="46" rx="5"/>
+  <text class="texto" x="795" y="826" text-anchor="middle">220 Ω</text>
+  <path class="cable-tierra" d="M870 819 H950 V930"/>
+  <text class="texto-pequeno" x="650" y="865" text-anchor="middle">LED rojo</text>
+
+  <!-- Barra de tierra -->
+  <path class="cable-tierra" d="M35 930 H1550"/>
+  <path class="cable-tierra" d="M750 930 V946 M720 946 H780 M730 960 H770 M740 974 H760"/>
+  <text class="subtitulo" x="790" y="970">GND común</text>
+
+  <!-- Leyenda -->
+  <rect class="componente" x="1120" y="610" width="400" height="230" rx="12"/>
+  <text class="subtitulo" x="1320" y="648" text-anchor="middle">Resumen de señales</text>
+  <line class="cable-alimentacion" x1="1160" y1="684" x2="1220" y2="684"/>
+  <text class="texto" x="1240" y="691">Alimentación de 5 V</text>
+  <line class="cable-disparo" x1="1160" y1="724" x2="1220" y2="724"/>
+  <text class="texto" x="1240" y="731">TRIG por GPIO5</text>
+  <line class="cable-eco" x1="1160" y1="764" x2="1220" y2="764"/>
+  <text class="texto" x="1240" y="771">ECHO hacia GPIO18</text>
+  <line class="cable-tierra" x1="1160" y1="804" x2="1220" y2="804"/>
+  <text class="texto" x="1240" y="811">Retorno a GND</text>
+</svg>
