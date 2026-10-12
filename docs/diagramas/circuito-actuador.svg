@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="titulo descripcion">
+  <title id="titulo">Circuito del objeto inteligente con tres LEDs</title>
+  <desc id="descripcion">ESP32 alimentado por USB. GPIO25 al ánodo del LED verde, GPIO26 al ánodo del LED amarillo y GPIO27 al ánodo del LED rojo. Cada cátodo vuelve al GND común mediante su propia resistencia de 220 ohmios.</desc>
+
+  <defs>
+    <style>
+      .fondo { fill: #ffffff; }
+      .componente { fill: #f5f7fa; stroke: #263238; stroke-width: 3; }
+      .titulo { fill: #17202a; font: 700 30px Arial, sans-serif; }
+      .subtitulo { fill: #37474f; font: 700 21px Arial, sans-serif; }
+      .texto { fill: #263238; font: 18px Arial, sans-serif; }
+      .texto-pequeno { fill: #455a64; font: 16px Arial, sans-serif; }
+      .pin { fill: #ffffff; stroke: #455a64; stroke-width: 2; }
+      .resistencia { fill: #fff8e1; stroke: #6d4c41; stroke-width: 3; }
+      .cable-tierra { fill: none; stroke: #263238; stroke-width: 4; }
+      .cable-usb { fill: none; stroke: #607d8b; stroke-width: 5; }
+      .cable-verde { fill: none; stroke: #2e7d32; stroke-width: 4; }
+      .cable-amarillo { fill: none; stroke: #c9a000; stroke-width: 4; }
+      .cable-rojo { fill: none; stroke: #c62828; stroke-width: 4; }
+      .led-verde { fill: #43a047; stroke: #1b5e20; stroke-width: 3; }
+      .led-amarillo { fill: #fdd835; stroke: #8e0000; stroke-width: 3; }
+      .led-rojo { fill: #e53935; stroke: #8e0000; stroke-width: 3; }
+      .nodo-tierra { fill: #263238; }
+      .nota { fill: #fffde7; stroke: #8d6e00; stroke-width: 2; }
+    </style>
+  </defs>
+
+  <rect class="fondo" width="1600" height="1000"/>
+  <text class="titulo" x="800" y="48" text-anchor="middle">Circuito del objeto inteligente 2 — Actuador</text>
+  <text class="texto-pequeno" x="800" y="78" text-anchor="middle">Práctica 2 · ESP32 y tres LEDs · Una resistencia de 220 Ω por LED</text>
+
+  <!-- Alimentación USB y ESP32. -->
+  <text class="texto" x="250" y="125" text-anchor="middle">Alimentación por USB (5 V)</text>
+  <path class="cable-usb" d="M250 135 V155"/>
+  <rect class="componente" x="70" y="155" width="360" height="555" rx="18"/>
+  <text class="subtitulo" x="250" y="204" text-anchor="middle">ESP32 / ESP-WROOM-32</text>
+  <text class="texto-pequeno" x="250" y="237" text-anchor="middle">Cliente TCP: actuator</text>
+
+  <rect class="pin" x="350" y="275" width="80" height="38"/>
+  <text class="texto" x="390" y="301" text-anchor="middle">GND</text>
+  <rect class="pin" x="350" y="350" width="80" height="38"/>
+  <text class="texto" x="390" y="376" text-anchor="middle">GPIO25</text>
+  <rect class="pin" x="350" y="480" width="80" height="38"/>
+  <text class="texto" x="390" y="506" text-anchor="middle">GPIO26</text>
+  <rect class="pin" x="350" y="610" width="80" height="38"/>
+  <text class="texto" x="390" y="636" text-anchor="middle">GPIO27</text>
+  <path class="cable-tierra" d="M350 294 H35 V900"/>
+
+  <!-- Verde: ánodo al GPIO25 y cátodo a la resistencia de 220 Ω. -->
+  <path class="cable-verde" d="M430 369 H620"/>
+  <circle class="led-verde" cx="650" cy="369" r="30"/>
+  <text x="650" y="376" text-anchor="middle" fill="#ffffff" font-family="Arial, sans-serif" font-size="18">LED</text>
+  <path class="cable-verde" d="M680 369 H800"/>
+  <text class="texto-pequeno" x="585" y="348" text-anchor="middle">A</text>
+  <text class="texto-pequeno" x="715" y="348" text-anchor="middle">K</text>
+  <rect class="resistencia" x="800" y="346" width="180" height="46" rx="5"/>
+  <text class="texto" x="890" y="376" text-anchor="middle">RV · 220 Ω</text>
+  <path class="cable-tierra" d="M980 369 H1100"/>
+  <text class="texto" x="650" y="428" text-anchor="middle">LED verde</text>
+
+  <!-- Amarillo: ánodo al GPIO26 y cátodo a su resistencia. -->
+  <path class="cable-amarillo" d="M430 499 H620"/>
+  <circle class="led-amarillo" cx="650" cy="499" r="30"/>
+  <text class="texto" x="650" y="506" text-anchor="middle">LED</text>
+  <path class="cable-amarillo" d="M680 499 H800"/>
+  <text class="texto-pequeno" x="585" y="478" text-anchor="middle">A</text>
+  <text class="texto-pequeno" x="715" y="478" text-anchor="middle">K</text>
+  <rect class="resistencia" x="800" y="476" width="180" height="46" rx="5"/>
+  <text class="texto" x="890" y="506" text-anchor="middle">RA · 220 Ω</text>
+  <path class="cable-tierra" d="M980 499 H1100"/>
+  <text class="texto" x="650" y="558" text-anchor="middle">LED amarillo</text>
+
+  <!-- Rojo: ánodo al GPIO27 y cátodo a su resistencia. -->
+  <path class="cable-rojo" d="M430 629 H620"/>
+  <circle class="led-rojo" cx="650" cy="629" r="30"/>
+  <text x="650" y="636" text-anchor="middle" fill="#ffffff" font-family="Arial, sans-serif" font-size="18">LED</text>
+  <path class="cable-rojo" d="M680 629 H800"/>
+  <text class="texto-pequeno" x="585" y="608" text-anchor="middle">A</text>
+  <text class="texto-pequeno" x="715" y="608" text-anchor="middle">K</text>
+  <rect class="resistencia" x="800" y="606" width="180" height="46" rx="5"/>
+  <text class="texto" x="890" y="636" text-anchor="middle">RR · 220 Ω</text>
+  <path class="cable-tierra" d="M980 629 H1100"/>
+  <text class="texto" x="650" y="688" text-anchor="middle">LED rojo</text>
+
+  <!-- Retorno compartido de las tres ramas. -->
+  <path class="cable-tierra" d="M1100 369 V900"/>
+  <circle class="nodo-tierra" cx="1100" cy="369" r="6"/>
+  <circle class="nodo-tierra" cx="1100" cy="499" r="6"/>
+  <circle class="nodo-tierra" cx="1100" cy="629" r="6"/>
+
+  <rect class="nota" x="1190" y="280" width="330" height="330" rx="10"/>
+  <text class="subtitulo" x="1355" y="321" text-anchor="middle">Polaridad de los LEDs</text>
+  <text class="texto" x="1220" y="370">A: ánodo hacia el GPIO</text>
+  <text class="texto" x="1220" y="407">K: cátodo hacia la resistencia</text>
+  <text class="texto" x="1220" y="464">Nivel alto: LED encendido</text>
+  <text class="texto" x="1220" y="501">Nivel bajo: LED apagado</text>
+  <text class="texto-pequeno" x="1220" y="562">GPIO: señales de 3.3 V</text>
+  <text class="texto-pequeno" x="1220" y="589">USB: alimentación de 5 V</text>
+
+  <rect class="componente" x="70" y="760" width="730" height="92" rx="10"/>
+  <text class="texto" x="435" y="797" text-anchor="middle">Cada LED tiene una resistencia de 220 Ω en serie</text>
+  <text class="texto-pequeno" x="435" y="828" text-anchor="middle">Los tres LEDs y este ESP32 comparten GND</text>
+
+  <!-- Barra de tierra del objeto con actuadores. -->
+  <path class="cable-tierra" d="M35 900 H1550"/>
+  <circle class="nodo-tierra" cx="35" cy="900" r="6"/>
+  <circle class="nodo-tierra" cx="1100" cy="900" r="6"/>
+  <path class="cable-tierra" d="M790 900 V928 M760 928 H820 M770 944 H810 M780 960 H800"/>
+  <text class="subtitulo" x="842" y="950">GND común del objeto actuador</text>
+</svg>

@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="titulo descripcion">
+  <title id="titulo">Circuito del objeto inteligente con sensor ultrasónico</title>
+  <desc id="descripcion">ESP32 alimentado por USB. HC-SR04 con VCC a 5 V, GND común, TRIG a GPIO5 y ECHO a GPIO18 mediante R1 de 2.2 kiloohmios y R2 y R3 de 2.2 kiloohmios en serie hacia GND.</desc>
+
+  <defs>
+    <style>
+      .fondo { fill: #ffffff; }
+      .componente { fill: #f5f7fa; stroke: #263238; stroke-width: 3; }
+      .sensor { fill: #e8f1fb; stroke: #245b8a; stroke-width: 3; }
+      .titulo { fill: #17202a; font: 700 30px Arial, sans-serif; }
+      .subtitulo { fill: #37474f; font: 700 21px Arial, sans-serif; }
+      .texto { fill: #263238; font: 18px Arial, sans-serif; }
+      .texto-pequeno { fill: #455a64; font: 16px Arial, sans-serif; }
+      .pin { fill: #ffffff; stroke: #455a64; stroke-width: 2; }
+      .resistencia { fill: #fff8e1; stroke: #6d4c41; stroke-width: 3; }
+      .cable-alimentacion { fill: none; stroke: #d32f2f; stroke-width: 4; }
+      .cable-tierra { fill: none; stroke: #263238; stroke-width: 4; }
+      .cable-disparo { fill: none; stroke: #1565c0; stroke-width: 4; }
+      .cable-eco { fill: none; stroke: #ef6c00; stroke-width: 4; }
+      .cable-usb { fill: none; stroke: #607d8b; stroke-width: 5; }
+      .nodo-eco { fill: #ef6c00; }
+      .nodo-tierra { fill: #263238; }
+      .nota { fill: #fffde7; stroke: #8d6e00; stroke-width: 2; }
+    </style>
+  </defs>
+
+  <rect class="fondo" width="1600" height="1000"/>
+  <text class="titulo" x="800" y="48" text-anchor="middle">Circuito del objeto inteligente 1 — Sensor</text>
+  <text class="texto-pequeno" x="800" y="78" text-anchor="middle">Práctica 2 · ESP32 y HC-SR04 · Conexiones del montaje de la práctica 1</text>
+
+  <!-- Alimentación USB y ESP32. -->
+  <text class="texto" x="250" y="125" text-anchor="middle">Alimentación por USB (5 V)</text>
+  <path class="cable-usb" d="M250 135 V155"/>
+  <rect class="componente" x="70" y="155" width="360" height="515" rx="18"/>
+  <text class="subtitulo" x="250" y="204" text-anchor="middle">ESP32 / ESP-WROOM-32</text>
+  <text class="texto-pequeno" x="250" y="237" text-anchor="middle">Objeto con sensor</text>
+  <text class="texto-pequeno" x="250" y="265" text-anchor="middle">Cliente TCP: sensor</text>
+
+  <rect class="pin" x="350" y="350" width="80" height="38"/>
+  <text class="texto" x="390" y="376" text-anchor="middle">VIN</text>
+  <rect class="pin" x="350" y="420" width="80" height="38"/>
+  <text class="texto" x="390" y="446" text-anchor="middle">GND</text>
+  <rect class="pin" x="350" y="500" width="80" height="38"/>
+  <text class="texto" x="390" y="526" text-anchor="middle">GPIO5</text>
+  <rect class="pin" x="350" y="610" width="80" height="38"/>
+  <text class="texto" x="390" y="636" text-anchor="middle">GPIO18</text>
+
+  <!-- Sensor ultrasónico; sus pines están debajo de los transductores. -->
+  <rect class="sensor" x="1170" y="155" width="350" height="500" rx="18"/>
+  <text class="subtitulo" x="1345" y="204" text-anchor="middle">HC-SR04</text>
+  <circle cx="1290" cy="272" r="48" fill="#cfd8dc" stroke="#546e7a" stroke-width="4"/>
+  <circle cx="1400" cy="272" r="48" fill="#cfd8dc" stroke="#546e7a" stroke-width="4"/>
+
+  <rect class="pin" x="1170" y="350" width="82" height="38"/>
+  <text class="texto" x="1211" y="376" text-anchor="middle">VCC</text>
+  <rect class="pin" x="1170" y="420" width="82" height="38"/>
+  <text class="texto" x="1211" y="446" text-anchor="middle">GND</text>
+  <rect class="pin" x="1170" y="490" width="82" height="38"/>
+  <text class="texto" x="1211" y="516" text-anchor="middle">TRIG</text>
+  <rect class="pin" x="1170" y="560" width="82" height="38"/>
+  <text class="texto" x="1211" y="586" text-anchor="middle">ECHO</text>
+
+  <!-- Alimentación, tierra y disparo. -->
+  <path class="cable-alimentacion" d="M430 369 H1170"/>
+  <text class="texto" x="795" y="352" text-anchor="middle">5 V</text>
+  <path class="cable-tierra" d="M350 439 H35 V900"/>
+  <path class="cable-tierra" d="M1252 439 H1550 V900"/>
+  <path class="cable-disparo" d="M430 519 H1080 V509 H1170"/>
+  <text class="texto" x="740" y="500" text-anchor="middle">TRIG</text>
+
+  <!-- R1 entre ECHO y el nodo; R2 y R3 en serie entre el nodo y GND. -->
+  <path class="cable-eco" d="M1170 579 H1090"/>
+  <rect class="resistencia" x="910" y="556" width="180" height="46" rx="5"/>
+  <text class="texto" x="1000" y="586" text-anchor="middle">R1 · 2.2 kΩ</text>
+  <path class="cable-eco" d="M910 579 H790"/>
+  <path class="cable-eco" d="M790 579 H650 V629 H430"/>
+  <circle class="nodo-eco" cx="790" cy="579" r="8"/>
+  <text class="texto-pequeno" x="565" y="657" text-anchor="middle">Nodo de lectura GPIO18</text>
+
+  <path class="cable-eco" d="M790 579 V640"/>
+  <rect class="resistencia" x="720" y="640" width="140" height="46" rx="5"/>
+  <text class="texto" x="790" y="670" text-anchor="middle">R2 · 2.2 kΩ</text>
+  <path class="cable-eco" d="M790 686 V716"/>
+  <rect class="resistencia" x="720" y="716" width="140" height="46" rx="5"/>
+  <text class="texto" x="790" y="746" text-anchor="middle">R3 · 2.2 kΩ</text>
+  <path class="cable-tierra" d="M790 762 V900"/>
+
+  <rect class="nota" x="980" y="710" width="540" height="112" rx="10"/>
+  <text class="subtitulo" x="1250" y="746" text-anchor="middle">Divisor de voltaje de ECHO</text>
+  <text class="texto" x="1250" y="780" text-anchor="middle">5 V × 4.4 kΩ / 6.6 kΩ ≈ 3.33 V</text>
+  <text class="texto-pequeno" x="1250" y="808" text-anchor="middle">GPIO18 conectado al nodo entre R1 y R2</text>
+
+  <rect class="componente" x="70" y="730" width="510" height="92" rx="10"/>
+  <text class="texto" x="325" y="767" text-anchor="middle">R1, R2 y R3: tres resistencias de 2.2 kΩ</text>
+  <text class="texto-pequeno" x="325" y="798" text-anchor="middle">El sensor y este ESP32 comparten GND</text>
+
+  <!-- Barra de tierra del objeto con sensor. -->
+  <path class="cable-tierra" d="M35 900 H1550"/>
+  <circle class="nodo-tierra" cx="35" cy="900" r="6"/>
+  <circle class="nodo-tierra" cx="790" cy="900" r="6"/>
+  <circle class="nodo-tierra" cx="1550" cy="900" r="6"/>
+  <path class="cable-tierra" d="M790 900 V928 M760 928 H820 M770 944 H810 M780 960 H800"/>
+  <text class="subtitulo" x="842" y="950">GND común del objeto sensor</text>
+</svg>
