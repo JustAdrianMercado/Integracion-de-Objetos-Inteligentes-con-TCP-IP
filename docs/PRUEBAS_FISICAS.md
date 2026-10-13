@@ -76,22 +76,24 @@ Grabar 10 s de cada modo y contar los encendidos.
 
 ## PN-01 — Estabilidad (RNF1: ≥ 10 min sin reinicios ni bloqueos)
 
-1. Iniciar el servidor con `--registro docs/evidencias/p2/pn01-estabilidad.log`.
-2. Dejar el sistema funcionando al menos 12 minutos, moviendo el objeto entre rangos de vez en cuando.
-3. Detener y ejecutar `tools.analizar_registro` sobre el archivo.
+1. Iniciar el servidor con `--registro docs/evidencias/p2/pn01-estabilidad.log` y conservar también las consolas serie de ambos ESP32. Identificar cada equipo y la versión utilizada.
+2. Registrar inicio y fin de una ventana externa común. Dejar el sistema funcionando al menos 12 minutos, moviendo el objeto entre rangos de vez en cuando.
+3. Observar continuidad de adquisición, comunicación y actuación; anotar reinicios, bloqueos, desconexiones y recuperaciones del sensor, del actuador y del servidor con sus instantes.
+4. Detener y ejecutar `tools.analizar_registro` sobre el archivo de la PC. Contrastar ese resumen con las consolas y observaciones de los tres equipos; no utilizar el log del servidor como prueba única de continuidad.
 
-Criterio: duración ≥ 600 s, un solo registro de cada placa, 0 cierres por 2 s sin `POST`, 0 `ERROR` y mayor intervalo entre `POST` menor que 2 s.
+Criterio de aceptación: operación durante ≥ 600 s con cero reinicios y cero bloqueos en ambos ESP32 y el servidor, manteniendo el recorrido y la actuación. Registros repetidos, cierres, `ERROR` e intervalos entre `POST` son indicadores complementarios de incidencias; no sustituyen el registro de eventos ni garantizan por sí solos estabilidad de los tres equipos.
 
-| Duración (s) | POST | Mayor intervalo (s) | Registros sensor / actuador | Cierres / ERROR | ¿Cumple? |
-|---:|---:|---:|---|---|---|
-| | | | | | |
+| Duración (s) | POST | Mayor intervalo (s) | Registros sensor / actuador | Reinicios sensor / actuador / PC | Bloqueos y continuidad de los tres equipos | Cierres / ERROR | ¿Cumple? |
+|---:|---:|---:|---|---|---|---|---|
+| | | | | | | | |
 
-## PN-02 — Exactitud (RNF2: error ≤ ±3 cm entre 3 y 150 cm)
+## PN-02 — Exactitud (RNF2: error absoluto máximo ≤ 3 cm entre 3 y 150 cm)
 
-Tres lecturas por posición, tomadas de la consola del sensor. Error = |lectura − referencia|.
+Tomar al menos tres lecturas individuales por posición de referencia, de la consola del sensor. Para cada lectura válida, calcular `error absoluto = |lectura − referencia|`. Evaluar el máximo individual por posición y el máximo global, no únicamente promedios. Registrar las lecturas inválidas por separado, sin asignarles error numérico cero ni ocultarlas. Anotar las condiciones y la cobertura realmente ensayada.
 
-| Referencia (cm) | Lectura 1 | Lectura 2 | Lectura 3 | Error máximo (cm) | ¿Cumple? |
+| Referencia (cm) | Lectura 1 | Lectura 2 | Lectura 3 | Error máximo individual (cm) | ¿Cumple? |
 |---:|---:|---:|---:|---:|---|
+| 3 | | | | | |
 | 5 | | | | | |
 | 20 | | | | | |
 | 45 | | | | | |
@@ -100,15 +102,16 @@ Tres lecturas por posición, tomadas de la consola del sensor. Error = |lectura 
 | 125 | | | | | |
 | 150 | | | | | |
 
-Error máximo de todas las posiciones: ______ cm. Si el error crece con la distancia de forma proporcional, la causa probable es la velocidad del sonido (`0.0343 cm/µs` supone unos 20 °C); mencionarlo en el análisis.
+Error absoluto máximo individual de todas las posiciones: ______ cm. Criterio: ≤ 3 cm en el intervalo ensayado de 3 a 150 cm. Si el error crece proporcionalmente con la distancia, considerar la velocidad del sonido (`0.0343 cm/µs` supone unos 20 °C) en el análisis, sin dar por demostrada esa causa.
 
 ## PN-03 — Tiempo de respuesta (RNF3: ≤ 1 s de extremo a extremo)
 
-1. Grabar en un mismo cuadro el objeto y los LEDs (60 fps si es posible).
-2. Mover el objeto de forma rápida entre dos rangos y dejarlo quieto.
-3. En el video, contar los cuadros entre el instante en que el objeto queda en la nueva posición y el cambio del LED. Tiempo = cuadros / fps.
+1. Grabar en un mismo cuadro el objeto, la referencia de distancia y los LEDs, con una única referencia temporal (60 fps si es posible); anotar la tasa real de cuadros y su resolución.
+2. Mover el objeto entre dos rangos. Identificar en la grabación el instante del cambio físico de distancia/rango que inicia la respuesta, **sin esperar a que el movimiento termine**.
+3. Identificar el cambio visible correspondiente del actuador. Contar los cuadros entre ambos eventos y calcular `tiempo = cuadros / fps`. No restar directamente timestamps de relojes distintos no sincronizados.
+4. Repetir las transiciones y evaluar el máximo observado; conservar el video y los instantes seleccionados para cada ensayo.
 
-| Ensayo | Transición | Cuadros | fps | Tiempo (s) | ¿≤ 1 s? |
+| Ensayo | Transición | Cuadros desde el cambio físico hasta actuación | fps | Tiempo (s) | ¿≤ 1 s? |
 |---:|---|---:|---:|---:|---|
 | 1 | Verde → rojo | | | | |
 | 2 | Rojo → verde | | | | |
@@ -116,17 +119,20 @@ Error máximo de todas las posiciones: ______ cm. Si el error crece con la dista
 | 4 | Amarillo → rojo | | | | |
 | 5 | Rojo → amarillo | | | | |
 
-Tiempo máximo: ______ s. Valor esperado: menos de 0.5 s (muestreo de 250 ms más la red).
+Tiempo máximo observado: ______ s. Criterio: ≤ 1 s. El intervalo nominal de adquisición y los tiempos configurados de red no sustituyen esta medición física.
 
-## PN-04 — Frecuencia de muestreo (RNF4: ≥ 2 lecturas/s)
+## PN-04 — Frecuencia de muestreo (RNF4: adquisición ≥ 2 lecturas/s)
 
-Usar el resultado de `tools.analizar_registro` de PN-01 (o de una sesión de al menos 60 s).
+1. Definir una ventana externa de duración conocida, de al menos 60 s, e identificar el método de conteo verificable de cada adquisición del sensor. Registrar instrumento o fuente del conteo, inicio y fin.
+2. Contar adquisiciones totales e inválidas del sensor por separado. Contabilizar también `POST` recibidos en la PC y cuántos comunican `invalid`; las llegadas TCP no prueban automáticamente todas las adquisiciones.
+3. Calcular `frecuencia de adquisición = adquisiciones / duración` y, separadamente, `frecuencia de recepción = POST recibidos / duración`. Documentar pérdidas, envíos pendientes, reconexiones y diferencias entre los conteos.
+4. Usar `tools.analizar_registro` de PN-01, o de otra sesión, como apoyo para recepción. Su estimación entre la primera y última llegada no equivale al conteo de adquisiciones en la ventana externa. Si solo se dispone del log de la PC, dejar pendiente la validación de RNF4.
 
-| Duración (s) | POST recibidos | Lecturas/s | Inválidas | ¿≥ 2/s? |
-|---:|---:|---:|---:|---|
-| | | | | |
+| Duración (s) | Adquisiciones sensor | Inválidas sensor | POST recibidos | POST invalid | Frecuencia adquisición (lecturas/s) | Frecuencia recepción (POST/s) | ¿Adquisición ≥ 2/s? |
+|---:|---:|---:|---:|---:|---:|---:|---|
+| | | | | | | | |
 
-Valor nominal: 4 lecturas/s (una cada 250 ms).
+Método y fuente del conteo de adquisiciones: [PENDIENTE DE EVIDENCIA]. Valor nominal: 4 lecturas/s con intervalo de 250 ms, condicionado al registro y capacidad de envío; no es un resultado medido.
 
 ## Lista de evidencias
 
