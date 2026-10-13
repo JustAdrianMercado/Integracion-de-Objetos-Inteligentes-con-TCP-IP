@@ -217,16 +217,227 @@ La PC deberá generar el comando `SET` con los estados de los tres LEDs después
 
 ### 2.4 Diagrama de clases
 
-Consultar el [diagrama de clases propuesto](docs/diagramas/Diseno_del_sistema.md#4-diagrama-de-clases-propuesto). Las interfaces y tipos allí definidos son propuestas; el registro de su implementación se prepara en §3.2.
+La estructura propuesta separa la medición, la comunicación, las reglas de control y la ejecución de los estados de los LEDs. El siguiente [diagrama de clases del diseño](docs/diagramas/Diseno_del_sistema.md#4-diagrama-de-clases-propuesto) conserva sus nombres, atributos, métodos y relaciones. Representa las interfaces principales previstas para la Práctica 2; no constituye una descripción de código final implementado.
+
+```mermaid
+classDiagram
+    direction TB
+
+    class SensorUltrasonico {
+        -uint8_t pinDisparo_
+        -uint8_t pinEco_
+        +iniciar()
+        +medirDistanciaCm() float
+    }
+
+    class ControladorLeds {
+        -uint8_t pinVerde_
+        -uint8_t pinAmarillo_
+        -uint8_t pinRojo_
+        -ComandoLeds comandoActual_
+        +iniciar()
+        +establecerEstados(ComandoLeds comando)
+        +actualizar(unsigned long tiempoActual)
+        +apagarTodos()
+    }
+
+    class EstadoLed {
+        <<enumeration>>
+        Apagado
+        Encendido
+        Parpadeo2Hz
+        Parpadeo4Hz
+    }
+
+    class ComandoLeds {
+        <<struct>>
+        +EstadoLed rojo
+        +EstadoLed amarillo
+        +EstadoLed verde
+    }
+
+    class ControlDistancia {
+        +calcularComando(float distanciaCm) ComandoLeds
+    }
+
+    class TipoCliente {
+        <<enumeration>>
+        Sensor
+        Actuador
+    }
+
+    class ProtocoloAplicacion {
+        +crearRegistro(TipoCliente tipo, char* salida)
+        +crearLectura(float distanciaCm, char* salida)
+        +crearComando(ComandoLeds comando, char* salida)
+        +leerRegistro(const char* linea, TipoCliente& tipo) bool
+        +leerLectura(const char* linea, float& distanciaCm) bool
+        +leerComando(const char* linea, ComandoLeds& comando) bool
+    }
+
+    class ClienteTcp {
+        -TipoCliente tipo_
+        -bool registrado_
+        +iniciar()
+        +actualizar(unsigned long tiempoActual)
+        +estaRegistrado() bool
+        +enviar(const char* mensaje) bool
+        +recibir(char* linea) bool
+    }
+
+    class ServidorTcp {
+        -bool sensorRegistrado_
+        -bool actuadorRegistrado_
+        +iniciar(uint16_t puerto) bool
+        +actualizar(unsigned long tiempoActual)
+    }
+
+    ComandoLeds --> EstadoLed : contiene tres estados
+    ControlDistancia ..> ComandoLeds : produce
+    ControladorLeds o-- ComandoLeds : conserva el estado actual
+    ProtocoloAplicacion ..> ComandoLeds : codifica e interpreta
+    ProtocoloAplicacion ..> TipoCliente : interpreta el registro
+    ClienteTcp --> ProtocoloAplicacion : registro y respuestas
+    ClienteTcp --> TipoCliente : identifica su función
+    ServidorTcp --> ProtocoloAplicacion : interpreta y responde
+    ServidorTcp --> ControlDistancia : calcula la actuación
+
+    note for SensorUltrasonico "Hardware del ESP32 sensor"
+    note for ControladorLeds "Hardware del ESP32 actuador"
+    note for ClienteTcp "Una instancia por ESP32"
+    note for ControlDistancia "Reglas ejecutadas en la PC"
+```
+
+Las clases y los tipos se distribuyen de acuerdo con la arquitectura de §2.1:
+
+| Clase o tipo propuesto | Responsabilidad | Equipo o ámbito previsto |
+|---|---|---|
+| `SensorUltrasonico` | Inicializar los pines del HC-SR04 y obtener la distancia mediante `medirDistanciaCm()`. | ESP32 sensor. |
+| `ControladorLeds` | Recibir `ComandoLeds` mediante `establecerEstados()`, actualizar las salidas y el parpadeo, y permitir el apagado de los tres LEDs. | ESP32 actuador. |
+| `ClienteTcp` | Mantener la conexión y el registro del rol, enviar mensajes y recibir líneas completas. | Una instancia en cada ESP32, con su propio rol. |
+| `ServidorTcp` | Aceptar y gestionar las conexiones de ambos roles, interpretar mensajes y coordinar el control central. | PC Windows. |
+| `ControlDistancia` | Clasificar una distancia y producir `ComandoLeds` mediante `calcularComando()`. | PC Windows. |
+| `ProtocoloAplicacion` | Construir e interpretar registros, lecturas y comandos de actuación. | Elemento conceptualmente compartido por clientes y servidor, según el intercambio que realiza cada equipo. |
+| `EstadoLed` y `ComandoLeds` | Representar los modos de un LED y reunir los estados rojo, amarillo y verde en un comando. | Dominio conceptualmente compartido, independiente de GPIO y sockets. |
+| `TipoCliente` | Identificar los roles `Sensor` y `Actuador` en el registro. | Tipo del protocolo conceptualmente compartido. |
+
+La dependencia de `ServidorTcp` respecto de `ControlDistancia` sitúa la clasificación en la PC. `ControlDistancia` produce un `ComandoLeds`, mientras `ProtocoloAplicacion` traduce esa representación a mensajes de texto o interpreta mensajes recibidos. Así, las reglas de control y los tipos del dominio pueden expresarse en C++ sin depender de Arduino o Winsock; las clases de hardware y red concentran esas dependencias.
+
+`ComandoLeds` contiene tres valores de `EstadoLed`, no tres controladores de hardware. La relación con `ControladorLeds`, rotulada como conservación del estado actual, representa el comando que este deberá mantener en `comandoActual_`. No se deduce de esa relación una necesidad de asignación dinámica. Las asociaciones de `ClienteTcp` con `TipoCliente` y `ProtocoloAplicacion` expresan, respectivamente, la identidad del cliente y el tratamiento de su registro y sus respuestas; las del servidor expresan la interpretación de mensajes y la generación de la actuación.
+
+Los programas principales de los ESP32 coordinarán los objetos locales, aunque no aparecen como clases en este diagrama. El programa sensor solicitará la medición y su envío; el programa actuador entregará los comandos recibidos al controlador. Esta coordinación explica por qué `SensorUltrasonico` no tiene una relación directa con `ClienteTcp` y por qué `ControladorLeds` no clasifica distancias. La entrada prevista de este último será `establecerEstados(ComandoLeds comando)`, en lugar de la clasificación local mediante `establecerDistancia()` descrita en la Práctica 1.
+
+Las firmas mantienen la separación entre datos y transporte: `calcularComando(float distanciaCm)` devolverá un `ComandoLeds`; `leerRegistro()`, `leerLectura()` y `leerComando()` devolverán un booleano e incorporarán los datos interpretados en sus parámetros de salida. Según el diseño, al interpretar `distance=invalid`, `leerLectura()` entregará `NAN`, que `ControlDistancia` convertirá en todos apagados. `ClienteTcp::enviar()` agregará LF (`\n`) al contenido y `recibir()` entregará una línea completa sin ese delimitador. `ProtocoloAplicacion` trabajará con el contenido; el buffer local previsto tiene 128 bytes, hasta 127 de contenido y el terminador C `\0`, que no se transmitirá.
+
+El diagrama es una vista resumida: no detalla todos los buffers y temporizadores necesarios para las secuencias de §2.5, ni las operaciones específicas para construir o interpretar `OK` y `ERROR`. También omite los tipos de retorno de las operaciones `crearRegistro()`, `crearLectura()` y `crearComando()`. Estos aspectos deberán confirmarse en las interfaces finales; no se añaden firmas ni relaciones para resolverlos en esta iteración. La agregación de `ComandoLeds` se interpreta conforme al atributo declarado, sin afirmar una política de propiedad de memoria no documentada.
 
 **Justificación detallada y correspondencia con las interfaces finales:** [PENDIENTE DE IMPLEMENTACIÓN]
 
 ### 2.5 Diagramas de secuencia
 
-- [Registro y funcionamiento normal](docs/diagramas/Diseno_del_sistema.md#51-registro-y-funcionamiento-normal).
-- [Ausencia de datos y recuperación](docs/diagramas/Diseno_del_sistema.md#52-ausencia-de-datos-y-recuperación).
+Las siguientes secuencias describen el comportamiento previsto entre los equipos de §2.1. Los participantes representan objetos físicos completos; las llamadas internas al servidor y al actuador se relacionan con las responsabilidades de §2.4. Los ejemplos son intercambios propuestos, no registros de una ejecución real. Cada mensaje de aplicación deberá terminar en LF (`\n`), aunque el delimitador se omite en las etiquetas para facilitar la lectura. El puerto `5000` continúa siendo un parámetro previsto.
+
+#### 2.5.1 Registro y funcionamiento normal
+
+El escenario reproduce la [secuencia de registro y funcionamiento normal](docs/diagramas/Diseno_del_sistema.md#51-registro-y-funcionamiento-normal) del diseño:
+
+```mermaid
+sequenceDiagram
+    participant S as ESP32 sensor
+    participant A as ESP32 actuador
+    participant PC as Servidor TCP (PC)
+
+    Note over S,PC: Ambos clientes se asocian al WiFi y abren su conexión TCP a la PC:5000
+    S->>PC: REGISTER type=sensor
+    PC-->>S: OK
+    A->>PC: REGISTER type=actuator
+    PC-->>A: OK
+    PC->>A: SET redLed=off yellowLed=off greenLed=off
+    Note over S,PC: Los registros también pueden llegar en el orden inverso
+
+    Note over S,PC: Ejemplos sucesivos: un POST cada 250 ms
+    S->>PC: POST distance=45.00
+    PC->>PC: calcularComando(45.00): rango rojo
+    PC->>A: SET redLed=blink_4 yellowLed=off greenLed=off
+    A->>A: Alternar el rojo cada 125 ms
+
+    S->>PC: POST distance=75.00
+    PC->>PC: calcularComando(75.00): rango amarillo
+    PC->>A: SET redLed=off yellowLed=blink_2 greenLed=off
+    A->>A: Alternar el amarillo cada 250 ms
+
+    S->>PC: POST distance=120.00
+    PC->>PC: calcularComando(120.00): rango verde
+    PC->>A: SET redLed=off yellowLed=off greenLed=on
+    A->>A: Mantener el verde encendido
+
+    S->>PC: POST distance=invalid
+    PC->>PC: calcularComando(NAN): todos apagados
+    PC->>A: SET redLed=off yellowLed=off greenLed=off
+    A->>A: Apagar los tres LEDs
+```
+
+Antes del registro, ambos ESP32 deberán asociarse a la red WiFi y establecer sus conexiones TCP hacia la PC. Cada cliente enviará `REGISTER` como primer mensaje de aplicación: `REGISTER type=sensor` para el objeto de adquisición y `REGISTER type=actuator` para el de actuación. El servidor reservará cada rol en un socket distinto y responderá `OK`; el cliente deberá esperar esa confirmación antes de iniciar el intercambio operativo. `OK` confirma exclusivamente el registro, no cada lectura ni cada actuación.
+
+El orden de registro podrá invertirse. En el ejemplo, el actuador se registra sin una lectura disponible y recibe `SET redLed=off yellowLed=off greenLed=off`. Si el sensor ya hubiera enviado una lectura, el servidor deberá aplicar el estado correspondiente cuando esa lectura sea válida y tenga menos de 2000 ms; si es inválida, antigua o inexistente, deberá ordenar el apagado. Mientras no exista un actuador registrado, el servidor conservará únicamente la última lectura y su tiempo de recepción.
+
+Una vez registrado, el sensor deberá enviar un `POST` con intervalo nominal de 250 ms. Para los ejemplos de 45.00, 75.00 y 120.00 cm, el servidor interpretará la lectura mediante `ProtocoloAplicacion`, calculará el comando mediante `ControlDistancia` y enviará, respectivamente, los estados rojo `blink_4`, amarillo `blink_2` o verde `on`, con los otros LEDs en `off`. El mensaje `POST distance=invalid` deberá producir un `SET` con los tres LEDs apagados. Estos ejemplos concretan el flujo de mensajes sin acreditar lecturas físicas ni tiempos medidos.
+
+Cada `POST` completo y válido, incluido el token `invalid`, deberá producir un `SET` si el actuador está registrado. El servidor enviará el comando incluso si coincide con el anterior. El ESP32 actuador deberá validar e interpretar el mensaje completo, entregar los tres estados a `ControladorLeds` y controlar localmente la temporización del parpadeo mediante `actualizar()`. La PC decidirá el modo, pero no enviará una orden por cada alternancia del GPIO. Los comandos idénticos deberán conservar la fase del modo vigente y el actuador no enviará una confirmación por cada lectura, conforme al protocolo diseñado.
+
+#### 2.5.2 Ausencia de datos, desconexión y recuperación
+
+El segundo escenario reproduce la [secuencia de ausencia de datos y recuperación](docs/diagramas/Diseno_del_sistema.md#52-ausencia-de-datos-y-recuperación). Sus ramas describen situaciones alternativas después del registro; la rama del sensor presupone que existe un actuador registrado.
+
+```mermaid
+sequenceDiagram
+    participant S as ESP32 sensor
+    participant A as ESP32 actuador
+    participant PC as Servidor TCP (PC)
+
+    Note over S,PC: Situaciones alternativas después del registro
+    alt El servidor acumula 2000 ms sin un POST del sensor
+        PC->>PC: Invalidar la última lectura y liberar el rol sensor
+        PC->>A: SET redLed=off yellowLed=off greenLed=off
+        PC--xS: Cerrar la conexión del sensor
+        A->>A: Apagar los tres LEDs
+        Note over S: Reintentar WiFi/TCP cada 2000 ms
+        S->>PC: Abrir nueva conexión TCP
+        S->>PC: REGISTER type=sensor
+        PC-->>S: OK
+        S->>PC: POST distance=120.00
+        PC->>A: SET redLed=off yellowLed=off greenLed=on
+    else El actuador detecta desconexión o acumula 2000 ms sin SET
+        A->>A: Apagar los tres LEDs
+        opt La conexión TCP se cerró
+            Note over A: Reintentar WiFi/TCP cada 2000 ms
+            A->>PC: Abrir nueva conexión TCP
+            A->>PC: REGISTER type=actuator
+            PC-->>A: OK
+            alt Última lectura válida de menos de 2000 ms
+                PC->>A: SET con el estado calculado de esa lectura
+            else Lectura inválida, antigua o inexistente
+                PC->>A: SET redLed=off yellowLed=off greenLed=off
+            end
+        end
+    end
+```
+
+**Ausencia de lecturas del sensor.** El servidor deberá contar 2000 ms desde la recepción del último `POST` completo y válido; `POST distance=invalid` también reiniciará ese plazo porque comunica el estado del sensor. Si todavía no hubiera recibido una lectura después del registro, el tiempo se contará desde su aceptación. Al vencer el plazo, la PC invalidará la lectura almacenada, enviará todos apagados al actuador registrado y cerrará la conexión del sensor, liberando su rol. El ESP32 sensor, al detectar la desconexión, deberá reintentar la conexión WiFi/TCP cada 2000 ms y registrarse de nuevo.
+
+**Ausencia de comandos en el actuador.** El ESP32 actuador deberá medir 2000 ms desde el último `SET` completo y válido, o desde la finalización del registro mientras espera el primero. Al vencer ese plazo, apagará localmente los tres LEDs. Si el socket sigue abierto, deberá mantener la conexión y permanecer apagado hasta recibir un `SET` válido; la ausencia de comandos por sí sola no implica abrir otro socket. Esta protección local permite apagar las salidas aun cuando la desconexión del servidor todavía no haya sido detectada.
+
+**Desconexión detectada.** Cuando el servidor detecte la desconexión del sensor, deberá invalidar inmediatamente sus datos, liberar el rol y ordenar el apagado al actuador registrado, sin esperar otros 2000 ms. Cuando el ESP32 actuador detecte la pérdida de su propia conexión, deberá apagar inmediatamente sus salidas. El envío desde la PC presupone que la conexión del actuador sigue disponible; si también se interrumpe, el apagado dependerá de la detección o del plazo local del actuador.
+
+**Reintento y nuevo registro.** Los ESP32 desconectados deberán reintentar WiFi/TCP cada 2000 ms, crear un socket nuevo y repetir `REGISTER` / `OK`. Los roles de conexiones cerradas deberán quedar liberados, y los fragmentos de mensajes, buffers y temporizadores de conexión se reiniciarán conforme al diseño. El registro tiene un plazo de 2000 ms: el servidor cerrará una conexión sin `REGISTER` completo dentro de ese tiempo, y el cliente cerrará y reintentará si no recibe `OK` dentro del plazo previsto. Estos tiempos se miden localmente, sin requerir relojes sincronizados entre equipos.
+
+**Restauración mediante un comando válido.** Tras el nuevo registro del sensor, una lectura como `POST distance=120.00` deberá producir el comando verde encendido que muestra el diagrama, si el actuador está registrado. Tras el nuevo registro del actuador, el servidor deberá enviar inmediatamente el comando correspondiente a la última lectura válida de menos de 2000 ms, o todos apagados si la lectura es inválida, antigua o inexistente. Un nuevo `SET` válido restablecerá los modos; después de un apagado por ausencia de datos, los parpadeos deberán comenzar desde encendido. Esta recuperación no supone reutilizar una lectura cuya vigencia haya vencido.
+
+Las secuencias son coherentes con la clasificación en `ControlDistancia`, el intercambio gestionado por las clases TCP y la ejecución local en `ControladorLeds`. Las actividades de supervisión y recuperación requieren detalles internos no mostrados en el diagrama de clases, que deberán contrastarse con las interfaces y el código finales. PV-06, PV-12 a PV-16 y sus evidencias permitirán verificar los escenarios de registro y recuperación; el flujo normal y la continuidad del parpadeo se relacionan con PV-01 a PV-05.
 
 **Correspondencia de las secuencias con los registros reales de intercambio:** [PENDIENTE DE EVIDENCIA]
+
+**Implementación de los mecanismos de registro, supervisión y recuperación:** [PENDIENTE DE IMPLEMENTACIÓN]
 
 ### 2.6 Protocolo de aplicación TCP
 
