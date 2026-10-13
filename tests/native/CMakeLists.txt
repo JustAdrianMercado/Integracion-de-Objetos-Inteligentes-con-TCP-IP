@@ -1,0 +1,4 @@
+add_executable(pruebas_control_distancia control_distancia.cpp)
+target_link_libraries(pruebas_control_distancia PRIVATE Compartido)
+
+add_test(NAME control_distancia COMMAND pruebas_control_distancia)
