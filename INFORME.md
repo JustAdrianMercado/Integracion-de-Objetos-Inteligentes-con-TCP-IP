@@ -526,16 +526,16 @@ sequenceDiagram
     participant PC as Servidor TCP Python
     participant A as ESP32 actuador
 
-    Note over S,A: Configuracion de red completa; ambos ESP32 ejecutan ClienteTcp.iniciar()
+    Note over S,A: Configuracion de red completa, ambos ESP32 ejecutan ClienteTcp.iniciar()
     A->>A: ControladorLeds.iniciar(): salidas apagadas
     S->>S: ClienteTcp.actualizar(): WiFi.begin() y asociacion
     A->>A: ClienteTcp.actualizar(): WiFi.begin() y asociacion
-    Note over S,A: WiFi conecta los equipos a traves del router; no clasifica distancias
+    Note over S,A: WiFi conecta los equipos a traves del router, no clasifica distancias
 
     A->>PC: Apertura TCP con socket_.connect()
     PC->>PC: ManejadorConexion.handle(): crear Cliente y receptor
     A->>PC: REGISTER type=actuator
-    PC->>PC: procesar(): leer_mensaje(); EstadoSistema.registrar()
+    PC->>PC: procesar(): leer_mensaje(), EstadoSistema.registrar()
     PC-->>A: OK
     PC-->>A: SET redLed=off yellowLed=off greenLed=off
     A->>A: ClienteTcp recibe OK y conserva el SET completo
@@ -544,13 +544,13 @@ sequenceDiagram
     S->>PC: Apertura TCP con socket_.connect()
     PC->>PC: ManejadorConexion.handle(): crear Cliente y receptor
     S->>PC: REGISTER type=sensor
-    PC->>PC: procesar(): leer_mensaje(); EstadoSistema.registrar()
+    PC->>PC: procesar(): leer_mensaje(), EstadoSistema.registrar()
     PC-->>S: OK
     S->>S: loop(): habilitar primera adquisicion nueva tras el registro
 
     loop Primera adquisicion o intervalo de 250 ms, registrado y puedeEnviar()
-        S->>S: SensorUltrasonico.medirDistanciaCm(); ProtocoloAplicacion.crearLectura()
-        Note over S,PC: ClienteTcp.enviar() prepara POST; actualizar() completa el envio
+        S->>S: SensorUltrasonico.medirDistanciaCm(), ProtocoloAplicacion.crearLectura()
+        Note over S,PC: ClienteTcp.enviar() prepara POST, actualizar() completa el envio
         Note over PC: Para cada POST aceptado, _actuar() genera SET y Cliente.enviar() usa codificar() y sendall()
         alt Ejemplo de distancia 45.00 cm
             S->>PC: POST distance=45.00
@@ -571,7 +571,7 @@ sequenceDiagram
         end
         A->>A: ClienteTcp.actualizar(): reconstruir, validar y guardar ultimo SET
         A->>A: loop(): recibir(), leerComando(), establecerEstados(), actualizar()
-        Note over A: La recepcion precede al consumo; SET posteriores pueden reemplazar el pendiente
+        Note over A: La recepcion precede al consumo, SET posteriores pueden reemplazar el pendiente
     end
 ```
 
@@ -597,30 +597,30 @@ sequenceDiagram
     participant PC as Servidor TCP Python
     participant A as ESP32 actuador
 
-    Note over S,A: Casos alternativos; los roles estan registrados al comenzar
+    Note over S,A: Casos alternativos, los roles estan registrados al comenzar
     alt Sensor pierde WiFi/TCP o vence su envio pendiente
         S->>S: ClienteTcp.cerrar(): detener socket y limpiar buffers
         Note over S: Sin registro o con envio pendiente, loop() no adquiere nuevas lecturas
         PC->>PC: handle(): detectar cierre/error o timeout de recv() sin datos
         PC->>PC: EstadoSistema.liberar(): invalidar lectura y generar apagado
         PC-->>A: SET redLed=off yellowLed=off greenLed=off
-        A->>A: Consumir comando; establecerEstados() y actualizar()
+        A->>A: Consumir comando, establecerEstados() y actualizar()
         opt Se perdio la asociacion WiFi del sensor
-            Note over S: Primer reintento tras 2000 ms; siguientes cada 10000 ms
+            Note over S: Primer reintento tras 2000 ms, siguientes cada 10000 ms
             S->>S: WiFi.begin() y recuperacion de la asociacion
         end
-        Note over S,PC: Reintento TCP tras 2000 ms; connect solicita timeout de 1000 ms
+        Note over S,PC: Reintento TCP tras 2000 ms, connect solicita timeout de 1000 ms
         S->>PC: Nueva apertura TCP
         S->>PC: REGISTER type=sensor
         PC->>PC: procesar(): EstadoSistema.registrar()
         PC-->>S: OK
-        S->>S: Adquirir una lectura nueva; crearLectura() y enviar()
+        S->>S: Adquirir una lectura nueva, crearLectura() y enviar()
         S->>PC: POST distance=120.00
         PC->>PC: nueva_lectura(): calcular_comando(120.00) y _actuar()
         PC-->>A: SET redLed=off yellowLed=off greenLed=on
         A->>A: Consumir y aplicar el comando disponible
     else Actuador acumula 2000 ms sin consumir un SET valido
-        A->>A: loop(): apagarPorAusencia(); ControladorLeds.apagarTodos()
+        A->>A: loop(): apagarPorAusencia(), ControladorLeds.apagarTodos()
         Note over A: Conserva TCP y registro si la conexion sigue abierta
         opt Llega un nuevo SET completo valido
             PC-->>A: SET redLed=off yellowLed=blink_2 greenLed=off
@@ -628,27 +628,27 @@ sequenceDiagram
             Note over A: El parpadeo reinicia desde encendido despues del apagado
         end
     else Actuador detecta perdida de conexion o registro
-        A->>A: ClienteTcp.cerrar(); loop(): apagarPorAusencia()
+        A->>A: ClienteTcp.cerrar(), loop(): apagarPorAusencia()
         PC->>PC: handle(): liberar rol actuador, conservar datos del sensor
-        Note over A: Reintentar TCP; si perdio WiFi, recuperar primero la asociacion
+        Note over A: Reintentar TCP, si perdio WiFi, recuperar primero la asociacion
         A->>PC: Nueva apertura TCP
         A->>PC: REGISTER type=actuator
         PC->>PC: procesar(): EstadoSistema.registrar()
         PC-->>A: OK
-        alt Ultima lectura valida reciente; ejemplo de 120 cm
+        alt Ultima lectura valida reciente, ejemplo de 120 cm
             PC-->>A: SET redLed=off yellowLed=off greenLed=on
         else Lectura invalida, antigua o inexistente
             PC-->>A: SET redLed=off yellowLed=off greenLed=off
         end
         A->>A: Consumir y aplicar el ultimo SET completo
-    else Servidor rechaza un mensaje del sensor; ejemplo numerico cero
+    else Servidor rechaza un mensaje del sensor, ejemplo numerico cero
         S->>PC: POST distance=0
-        PC->>PC: leer_mensaje() rechaza; cerrar_con_error() libera el sensor
+        PC->>PC: leer_mensaje() rechaza, cerrar_con_error() libera el sensor
         PC-->>A: SET redLed=off yellowLed=off greenLed=off
         A->>A: Consumir comando y apagar mediante el controlador
         PC-->>S: ERROR reason=invalid_message
         S->>S: ClienteTcp detecta ERROR, cierra y limpia buffers
-        Note over S,PC: El servidor finaliza la conexion; el sensor reintenta y repite REGISTER
+        Note over S,PC: El servidor finaliza la conexion, el sensor reintenta y repite REGISTER
     end
 ```
 
