@@ -12,9 +12,9 @@ else()
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-add_subdirectory(lib/Compartido)
+add_subdirectory(packages/Compartido)
 
 include(CTest)
 if(BUILD_TESTING)
-    add_subdirectory(test)
+    add_subdirectory(tests/native)
 endif()

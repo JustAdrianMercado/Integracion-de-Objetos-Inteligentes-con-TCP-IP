@@ -121,7 +121,7 @@ VGPIO18 = VECHO × (R2 + R3) / (R1 + R2 + R3)
 VGPIO18 = 5 V × 4.4 kΩ / 6.6 kΩ ≈ 3.33 V
 ```
 
-La lectura conserva el pulso TRIG de 10 µs y el timeout de ECHO de 30000 µs definidos en [`SensorUltrasonico.cpp`](../../src/SensorUltrasonico.cpp).
+La lectura conserva el pulso TRIG de 10 µs y el timeout de ECHO de 30000 µs definidos en [`SensorUltrasonico.cpp`](../../apps/firmware/src/SensorUltrasonico.cpp).
 
 ### 3.2 Objeto inteligente con actuadores
 
