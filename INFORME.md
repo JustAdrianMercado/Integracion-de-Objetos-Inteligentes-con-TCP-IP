@@ -223,30 +223,194 @@ La PC deberá generar el comando `SET` con los estados de los tres LEDs después
 
 ### 2.4 Diagrama de clases
 
-La estructura propuesta separa la medición, la comunicación, las reglas de control y la ejecución de los estados de los LEDs. El siguiente [diagrama de clases del diseño](docs/diagramas/Diseno_del_sistema.md#4-diagrama-de-clases-propuesto) conserva sus nombres, atributos, métodos y relaciones. Representa las interfaces principales previstas para la Práctica 2; no constituye una descripción de código final implementado.
+Este apartado representa los componentes existentes en el código y distingue sus responsabilidades de las adaptaciones futuras del [diseño del equipo](docs/diagramas/Diseno_del_sistema.md#4-diagrama-de-clases-propuesto). Se utilizan dos diagramas porque Python y C++ tienen implementaciones independientes del dominio y del protocolo: **el servidor Python no invoca las clases de la biblioteca C++**. Los diagramas seleccionan atributos y operaciones principales; las firmas completas se conservan en los archivos enlazados.
+
+#### 2.4.1 Servidor Python
+
+La implementación se organiza en `servidor.py`, `dominio.py` y `protocolo.py`; `__main__.py` contiene las funciones de validación de argumentos y el inicio del servicio. Las clases externas del diagrama pertenecen a la biblioteca estándar y permiten mostrar las dos herencias que declara el código.
 
 ```mermaid
 classDiagram
     direction TB
+    class ThreadingTCPServer {
+        <<biblioteca_estandar>>
+    }
+    class BaseRequestHandler {
+        <<biblioteca_estandar>>
+    }
+    class ServidorTcp {
+        +estado
+        +sesiones
+        +server_bind()
+        +process_request(request, client_address)
+        +server_close()
+    }
+    class ManejadorConexion {
+        +handle()
+    }
+    class Sesion {
+        +conexion
+        +aceptada
+        +ultima_actividad
+        +rol
+        +cerrando
+        +detener
+        +salida
+        +receptor
+    }
+    class EstadoSistema {
+        +lock
+        +roles
+        +ultimo_comando
+        +ultima_lectura
+        +procesar(sesion, linea)
+        +rechazar(sesion, motivo)
+        +liberar(sesion)
+        +revisar_plazos(sesion)
+    }
+    class ColaEnvio {
+        -_mensajes
+        -_desplazamiento
+        -_pendientes
+        -_lock
+        +encolar(linea) bool
+        +vacia() bool
+        +enviar(destino)
+    }
+    class ControlDistancia {
+        +calcular_comando(distancia_cm) ComandoLeds
+    }
+    class ComandoLeds {
+        <<dataclass_inmutable>>
+        +rojo
+        +amarillo
+        +verde
+    }
+    class EstadoLed {
+        <<StrEnum>>
+        APAGADO
+        ENCENDIDO
+        PARPADEO_2_HZ
+        PARPADEO_4_HZ
+    }
+    class Mensaje {
+        <<dataclass_inmutable>>
+        +tipo
+        +valor
+    }
+    class ReceptorLineas {
+        -_contenido
+        -_rechazado
+        +agregar(bloque)
+    }
+    class TipoCliente {
+        <<StrEnum>>
+        SENSOR
+        ACTUADOR
+    }
+    class MotivoError {
+        <<StrEnum>>
+        MENSAJE_INVALIDO
+        NO_REGISTRADO
+        ROL_OCUPADO
+    }
+    ThreadingTCPServer <|-- ServidorTcp
+    BaseRequestHandler <|-- ManejadorConexion
+    ServidorTcp --> EstadoSistema : estado
+    ServidorTcp --> Sesion : sesiones por socket
+    ServidorTcp ..> ManejadorConexion : manejador de conexiones
+    ManejadorConexion ..> EstadoSistema : procesa y supervisa
+    ManejadorConexion ..> Sesion : atiende la conexion
+    Sesion --> ColaEnvio : salida
+    Sesion --> ReceptorLineas : receptor
+    Sesion --> TipoCliente : rol registrado
+    EstadoSistema --> Sesion : roles reservados
+    EstadoSistema --> ComandoLeds : ultimo_comando
+    EstadoSistema ..> ControlDistancia : calcula estados
+    EstadoSistema ..> Mensaje : interpreta el resultado del parser
+    EstadoSistema ..> MotivoError : rechazo
+    ControlDistancia ..> ComandoLeds : produce
+    ComandoLeds --> EstadoLed : tres valores
+    Mensaje ..> TipoCliente : valor de REGISTER
+    Mensaje ..> ComandoLeds : valor de SET
+    Mensaje ..> MotivoError : valor de ERROR
+```
 
+`ServidorTcp` hereda de `socketserver.ThreadingTCPServer`, crea `EstadoSistema` y registra una `Sesion` por socket aceptado. `ManejadorConexion`, derivado de `BaseRequestHandler`, ejecuta `handle()` en el contexto de atención de cada conexión: supervisa plazos, recibe bloques, entrega líneas al estado del sistema y atiende la cola de salida. `serve_forever()` y `shutdown()` son operaciones heredadas utilizadas por la entrada de consola; no sustituyen los métodos propios representados.
+
+Cada `Sesion` conserva el socket, el rol, los tiempos y el evento de detención, y crea su propia `ColaEnvio` y su propio `ReceptorLineas`. `EstadoSistema` administra los roles reservados y el último comando, y almacena en `ultima_lectura` el instante de recepción, no un historial de distancias. Su `RLock` protege el estado compartido. `ColaEnvio` dispone de un bloqueo propio y conserva el desplazamiento de escrituras parciales; el manejador envía bytes fuera del bloqueo global de estado. En el diagrama, el signo `-` de los atributos Python con prefijo `_` expresa su uso interno por convención, no una restricción de acceso impuesta por el lenguaje.
+
+`ControlDistancia.calcular_comando()` es un método estático que produce una instancia inmutable de `ComandoLeds`. `EstadoLed`, `TipoCliente` y `MotivoError` son enumeraciones `StrEnum`; `Mensaje` y `ComandoLeds` son clases de datos declaradas con `dataclass(frozen=True)`. `Mensaje.tipo` identifica el comando y `valor` contiene el rol, la distancia, el comando de LEDs, el motivo de error o `None`, según corresponda. `ReceptorLineas.agregar()` es un generador: conserva fragmentos y entrega contenido completo sin LF.
+
+La interpretación y construcción del protocolo Python son **funciones de módulo**, no métodos de una clase `ProtocoloAplicacion`: `leer_mensaje()` devuelve `Mensaje`, `crear_comando()` y `crear_error()` construyen contenidos y `codificar()` valida y añade LF. `EstadoSistema.procesar()` utiliza `leer_mensaje()` y el dominio Python; la cola utiliza `codificar()`. Los errores de contenido o delimitación se notifican mediante `MensajeInvalido`, una excepción derivada de `ValueError`, que el manejador traduce a la política de rechazo. Estas funciones y la excepción se documentan en la tabla sin crear clases artificiales para representarlas.
+
+#### 2.4.2 Firmware y biblioteca C++
+
+El firmware existente conserva las clases de hardware de P1. La biblioteca C++ incorpora el dominio de P2, el protocolo y la recepción de líneas, sin depender de sockets. El diagrama siguiente representa ese código; **no incluye `ClienteTcp` ni los programas independientes de sensor y actuador, porque todavía no existen**.
+
+```mermaid
+classDiagram
+    direction TB
     class SensorUltrasonico {
         -uint8_t pinDisparo_
         -uint8_t pinEco_
-        +iniciar()
+        +SensorUltrasonico(uint8_t pinDisparo, uint8_t pinEco)
+        +iniciar() void
         +medirDistanciaCm() float
     }
-
     class ControladorLeds {
         -uint8_t pinVerde_
         -uint8_t pinAmarillo_
         -uint8_t pinRojo_
-        -ComandoLeds comandoActual_
-        +iniciar()
-        +establecerEstados(ComandoLeds comando)
-        +actualizar(unsigned long tiempoActual)
-        +apagarTodos()
+        -RangoDistancia rangoActual_
+        -bool ledsEncendidos_
+        -unsigned long ultimoCambioMs_
+        +ControladorLeds(uint8_t pinVerde, uint8_t pinAmarillo, uint8_t pinRojo)
+        +iniciar() void
+        +establecerDistancia(float distanciaCm) void
+        +actualizar(unsigned long tiempoActual) void
+        +obtenerRangoActual() RangoDistancia
+        -clasificarDistancia(float distanciaCm) RangoDistancia
+        -aplicarEstadoLeds() void
+        -apagarTodos() void
     }
-
+    class RangoDistancia {
+        <<enumeration>>
+        Invalido
+        Rojo
+        Amarillo
+        Verde
+        Lejos
+    }
+    class ControlDistancia {
+        +calcularComando(float distanciaCm) ComandoLeds
+    }
+    class ProtocoloAplicacion {
+        +crearRegistro(TipoCliente tipo, char* salida, std::size_t capacidad) bool
+        +crearLectura(float distanciaCm, char* salida, std::size_t capacidad) bool
+        +crearComando(const ComandoLeds& comando, char* salida, std::size_t capacidad) bool
+        +crearOk(char* salida, std::size_t capacidad) bool
+        +crearError(MotivoError motivo, char* salida, std::size_t capacidad) bool
+        +leerRegistro(const char* linea, TipoCliente& tipo) bool
+        +leerLectura(const char* linea, float& distanciaCm) bool
+        +leerComando(const char* linea, ComandoLeds& comando) bool
+        +leerOk(const char* linea) bool
+        +leerError(const char* linea, MotivoError& motivo) bool
+    }
+    class ReceptorLineas {
+        -std::size_t longitud_
+        -bool completa_
+        -bool rechazada_
+        +agregar(char byte) ResultadoRecepcion
+        +linea() const char*
+        +reiniciar() void
+    }
+    class ResultadoRecepcion {
+        <<enumeration>>
+        Incompleto
+        LineaCompleta
+        MensajeInvalido
+    }
     class EstadoLed {
         <<enumeration>>
         Apagado
@@ -254,104 +418,80 @@ classDiagram
         Parpadeo2Hz
         Parpadeo4Hz
     }
-
     class ComandoLeds {
         <<struct>>
         +EstadoLed rojo
         +EstadoLed amarillo
         +EstadoLed verde
     }
-
-    class ControlDistancia {
-        +calcularComando(float distanciaCm) ComandoLeds
-    }
-
     class TipoCliente {
         <<enumeration>>
         Sensor
         Actuador
     }
-
-    class ProtocoloAplicacion {
-        +crearRegistro(TipoCliente tipo, char* salida)
-        +crearLectura(float distanciaCm, char* salida)
-        +crearComando(ComandoLeds comando, char* salida)
-        +leerRegistro(const char* linea, TipoCliente& tipo) bool
-        +leerLectura(const char* linea, float& distanciaCm) bool
-        +leerComando(const char* linea, ComandoLeds& comando) bool
+    class MotivoError {
+        <<enumeration>>
+        MensajeInvalido
+        NoRegistrado
+        RolOcupado
     }
-
-    class ClienteTcp {
-        -TipoCliente tipo_
-        -bool registrado_
-        +iniciar()
-        +actualizar(unsigned long tiempoActual)
-        +estaRegistrado() bool
-        +enviar(const char* mensaje) bool
-        +recibir(char* linea) bool
-    }
-
-    class ServidorTcp {
-        -bool sensorRegistrado_
-        -bool actuadorRegistrado_
-        +iniciar(uint16_t puerto) bool
-        +actualizar(unsigned long tiempoActual)
-    }
-
-    ComandoLeds --> EstadoLed : contiene tres estados
+    ControladorLeds --> RangoDistancia : clasificacion local P1
     ControlDistancia ..> ComandoLeds : produce
-    ControladorLeds o-- ComandoLeds : conserva el estado actual
+    ComandoLeds --> EstadoLed : tres valores
     ProtocoloAplicacion ..> ComandoLeds : codifica e interpreta
-    ProtocoloAplicacion ..> TipoCliente : interpreta el registro
-    ClienteTcp --> ProtocoloAplicacion : registro y respuestas
-    ClienteTcp --> TipoCliente : identifica su función
-    ServidorTcp --> ProtocoloAplicacion : interpreta y responde
-    ServidorTcp --> ControlDistancia : calcula la actuación
-
-    note for SensorUltrasonico "Hardware del ESP32 sensor"
-    note for ControladorLeds "Hardware del ESP32 actuador"
-    note for ClienteTcp "Una instancia por ESP32"
-    note for ControlDistancia "Reglas ejecutadas en la PC"
+    ProtocoloAplicacion ..> TipoCliente : registro
+    ProtocoloAplicacion ..> MotivoError : errores
+    ReceptorLineas ..> ProtocoloAplicacion : constantes de capacidad
+    ReceptorLineas ..> ResultadoRecepcion : resultado por byte
 ```
 
-Las clases y los tipos se distribuyen de acuerdo con la arquitectura de §2.1:
+`SensorUltrasonico` encapsula TRIG y ECHO y proporciona la adquisición heredada. `ControladorLeds` recibe una distancia mediante `establecerDistancia()`, la clasifica en `RangoDistancia` y controla los GPIO. Su `apagarTodos()` es privado; no tiene `establecerEstados()` ni `comandoActual_`, y no depende de `ComandoLeds`. Mantiene los límites de 5, 15 y 25 cm y la alternancia de 150 ms de P1. El programa local `main.cpp` coordina sensor y controlador, pero es un conjunto de funciones Arduino, no una clase adicional.
 
-| Clase o tipo propuesto | Responsabilidad | Equipo o ámbito previsto |
-|---|---|---|
-| `SensorUltrasonico` | Inicializar los pines del HC-SR04 y obtener la distancia mediante `medirDistanciaCm()`. | ESP32 sensor. |
-| `ControladorLeds` | Recibir `ComandoLeds` mediante `establecerEstados()`, actualizar las salidas y el parpadeo, y permitir el apagado de los tres LEDs. | ESP32 actuador. |
-| `ClienteTcp` | Mantener la conexión y el registro del rol, enviar mensajes y recibir líneas completas. | Una instancia en cada ESP32, con su propio rol. |
-| `ServidorTcp` | Aceptar y gestionar las conexiones de ambos roles, interpretar mensajes y coordinar el control central. | PC Windows. |
-| `ControlDistancia` | Clasificar una distancia y producir `ComandoLeds` mediante `calcularComando()`. | PC Windows. |
-| `ProtocoloAplicacion` | Construir e interpretar registros, lecturas y comandos de actuación. | Elemento conceptualmente compartido por clientes y servidor, según el intercambio que realiza cada equipo. |
-| `EstadoLed` y `ComandoLeds` | Representar los modos de un LED y reunir los estados rojo, amarillo y verde en un comando. | Dominio conceptualmente compartido, independiente de GPIO y sockets. |
-| `TipoCliente` | Identificar los roles `Sensor` y `Actuador` en el registro. | Tipo del protocolo conceptualmente compartido. |
+`ControlDistancia` C++ sí aplica los límites de 50 y 100 cm y devuelve `ComandoLeds`; permanece como referencia de prueba, no como clasificador ejecutado por el servidor Python. `ComandoLeds` inicializa los tres valores en `EstadoLed::Apagado`. `TipoCliente`, `MotivoError`, `EstadoLed` y `ResultadoRecepcion` son enumeraciones con tipo subyacente `std::uint8_t`; `RangoDistancia` es la enumeración propia del firmware heredado.
 
-La dependencia de `ServidorTcp` respecto de `ControlDistancia` sitúa la clasificación en la PC. `ControlDistancia` produce un `ComandoLeds`, mientras `ProtocoloAplicacion` traduce esa representación a mensajes de texto o interpreta mensajes recibidos. Así, las reglas de control y los tipos del dominio pueden expresarse en C++ sin depender de Arduino o Winsock; las clases de hardware y red concentran esas dependencias.
+Todas las operaciones de `ProtocoloAplicacion` son estáticas y devuelven `bool`. Las operaciones de construcción reciben la capacidad real del buffer; las de interpretación mantienen sus parámetros de salida sin cambios si fallan. `ReceptorLineas` usa un buffer fijo de 128 bytes y devuelve `ResultadoRecepcion` por byte. Debe consumirse `linea()` después de `LineaCompleta` y antes del siguiente byte; `reiniciar()` descarta fragmentos y errores para una conexión nueva. El diagrama omite algunos atributos auxiliares para conservar legibilidad; `calcularComando()`, `obtenerRangoActual()`, `clasificarDistancia()` y `linea()` están declarados `const` en las cabeceras.
 
-`ComandoLeds` contiene tres valores de `EstadoLed`, no tres controladores de hardware. La relación con `ControladorLeds`, rotulada como conservación del estado actual, representa el comando que este deberá mantener en `comandoActual_`. No se deduce de esa relación una necesidad de asignación dinámica. Las asociaciones de `ClienteTcp` con `TipoCliente` y `ProtocoloAplicacion` expresan, respectivamente, la identidad del cliente y el tratamiento de su registro y sus respuestas; las del servidor expresan la interpretación de mensajes y la generación de la actuación.
+#### 2.4.3 Responsabilidades, archivos y estado
 
-Los programas principales de los ESP32 coordinarán los objetos locales, aunque no aparecen como clases en este diagrama. El programa sensor solicitará la medición y su envío; el programa actuador entregará los comandos recibidos al controlador. Esta coordinación explica por qué `SensorUltrasonico` no tiene una relación directa con `ClienteTcp` y por qué `ControladorLeds` no clasifica distancias. La entrada prevista de este último será `establecerEstados(ComandoLeds comando)`, en lugar de la clasificación local mediante `establecerDistancia()` descrita en la Práctica 1.
+| Componente | Lenguaje | Archivo o módulo | Responsabilidad | Estado de implementación |
+|---|---|---|---|---|
+| `ServidorTcp` | Python | [servidor.py](apps/servidor/servidor.py) | Configurar y administrar el servicio TCP y las sesiones. | Implementado en código; integración física pendiente. |
+| `ManejadorConexion` | Python | [servidor.py](apps/servidor/servidor.py) | Atender recepción, envíos, errores y plazos de cada conexión. | Implementado en código. |
+| `Sesion` | Python | [servidor.py](apps/servidor/servidor.py) | Conservar socket, rol, tiempos, receptor y cola por conexión. | Implementado en código. |
+| `EstadoSistema` | Python | [servidor.py](apps/servidor/servidor.py) | Reservar/liberar roles, clasificar lecturas y coordinar comandos. | Implementado en código. |
+| `ColaEnvio` | Python | [servidor.py](apps/servidor/servidor.py) | Encolar mensajes y conservar el progreso de escrituras parciales. | Implementado en código. |
+| `ControlDistancia`, `ComandoLeds`, `EstadoLed` | Python | [dominio.py](apps/servidor/dominio.py) | Ejecutar la clasificación y representar los estados de actuación. | Implementados en código; actuación física pendiente. |
+| `Mensaje`, `ReceptorLineas`, `TipoCliente`, `MotivoError` | Python | [protocolo.py](apps/servidor/protocolo.py) | Representar mensajes, delimitar líneas y definir roles y errores. | Implementados en código. |
+| `leer_mensaje`, `crear_comando`, `crear_error`, `codificar`, `MensajeInvalido` | Python | [protocolo.py](apps/servidor/protocolo.py) | Interpretar/codificar mediante funciones de módulo y notificar errores mediante una excepción. | Implementados en código. |
+| `main`, `puerto_valido`, `ipv4_valida` | Python | [__main__.py](apps/servidor/__main__.py) | Validar argumentos e iniciar y detener el servicio. | Funciones implementadas en código. |
+| `SensorUltrasonico` | C++ | [SensorUltrasonico.h](apps/firmware/include/SensorUltrasonico.h), [implementación](apps/firmware/src/SensorUltrasonico.cpp) | Adquirir distancias con el HC-SR04. | Heredado de P1; integración con el cliente pendiente. |
+| `ControladorLeds`, `RangoDistancia` | C++ | [ControladorLeds.h](apps/firmware/include/ControladorLeds.h), [implementación](apps/firmware/src/ControladorLeds.cpp) | Clasificar y actuar localmente en el programa P1. | Heredados; adaptación a comandos P2 pendiente. |
+| `ControlDistancia` | C++ | [ControlDistancia.h](packages/Compartido/src/ControlDistancia.h), [implementación](packages/Compartido/src/ControlDistancia.cpp) | Aplicar las reglas P2 como referencia de prueba. | Implementado; no invocado por Python. |
+| `ProtocoloAplicacion` | C++ | [ProtocoloAplicacion.h](packages/Compartido/src/ProtocoloAplicacion.h), [implementación](packages/Compartido/src/ProtocoloAplicacion.cpp) | Construir e interpretar los cinco mensajes de aplicación. | Implementado; uso por clientes pendiente. |
+| `ReceptorLineas`, `ResultadoRecepcion` | C++ | [ReceptorLineas.h](packages/Compartido/src/ReceptorLineas.h), [implementación](packages/Compartido/src/ReceptorLineas.cpp) | Reconstruir líneas y comunicar el resultado de recepción por byte. | Implementados; adaptador TCP pendiente. |
+| `EstadoLed`, `ComandoLeds`, `TipoCliente`, `MotivoError` | C++ | [EstadoLed.h](packages/Compartido/src/EstadoLed.h), [ComandoLeds.h](packages/Compartido/src/ComandoLeds.h), [TipoCliente.h](packages/Compartido/src/TipoCliente.h), [MotivoError.h](packages/Compartido/src/MotivoError.h) | Representar modos, comandos, roles y errores. | Tipos implementados. |
 
-Las firmas mantienen la separación entre datos y transporte: `calcularComando(float distanciaCm)` devolverá un `ComandoLeds`; `leerRegistro()`, `leerLectura()` y `leerComando()` devolverán un booleano e incorporarán los datos interpretados en sus parámetros de salida. Según el diseño, al interpretar `distance=invalid`, `leerLectura()` entregará `NAN`, que `ControlDistancia` convertirá en todos apagados. `ClienteTcp::enviar()` agregará LF (`\n`) al contenido y `recibir()` entregará una línea completa sin ese delimitador. `ProtocoloAplicacion` trabajará con el contenido; el buffer local previsto tiene 128 bytes, hasta 127 de contenido y el terminador C `\0`, que no se transmitirá.
+La adquisición y la actuación física permanecen encapsuladas en las clases de hardware C++. La comunicación y la administración de sesiones del lado PC corresponden a `ServidorTcp`, `ManejadorConexion`, `Sesion`, `EstadoSistema` y `ColaEnvio`; la interpretación del protocolo Python se mantiene en funciones de módulo y su receptor. El dominio Python clasifica sin depender de GPIO, y los componentes C++ de protocolo y dominio no administran sockets. Esta separación permite revisar cada responsabilidad y comparar el contrato entre lenguajes sin confundir sus implementaciones.
 
-El diagrama es una vista resumida: no detalla todos los buffers y temporizadores necesarios para las secuencias de §2.5, ni las operaciones específicas para construir o interpretar `OK` y `ERROR`. También omite los tipos de retorno de las operaciones `crearRegistro()`, `crearLectura()` y `crearComando()`. Estos aspectos deberán confirmarse en las interfaces finales; no se añaden firmas ni relaciones para resolverlos en esta iteración. La agregación de `ComandoLeds` se interpreta conforme al atributo declarado, sin afirmar una política de propiedad de memoria no documentada.
+Para completar el diseño objetivo se requiere `ClienteTcp`, los programas principales independientes de ambos ESP32 y la adaptación de `ControladorLeds` para ejecutar conjuntamente los estados recibidos. Se conservan como decisiones futuras del diseño y del [plan de implementación](docs/PLAN_IMPLEMENTACION.md), sin representarlos como clases existentes.
 
-**Justificación detallada y correspondencia con las interfaces finales:** [PENDIENTE DE IMPLEMENTACIÓN]
+**Clientes ESP32, adaptación del actuador y correspondencia con las interfaces finales:** [PENDIENTE DE IMPLEMENTACIÓN]
+
+**Validación de la integración de los componentes y evidencias de ejecución:** [PENDIENTE DE EVIDENCIA]
 
 ### 2.5 Diagramas de secuencia
 
-Las siguientes secuencias describen el comportamiento previsto entre los equipos de §2.1. Los participantes representan objetos físicos completos; las llamadas internas al servidor y al actuador se relacionan con las responsabilidades de §2.4. Los ejemplos son intercambios propuestos, no registros de una ejecución real. Cada mensaje de aplicación deberá terminar en LF (`\n`), aunque el delimitador se omite en las etiquetas para facilitar la lectura. El puerto `5000` continúa siendo un parámetro previsto.
+Los dos diagramas representan **escenarios objetivo del recorrido completo**. Las operaciones internas de la PC están implementadas en Python; la asociación WiFi, el transporte de los ESP32 y la actuación física corresponden a los clientes todavía pendientes. Los mensajes son ejemplos del contrato, no registros de ejecución. Cada mensaje de aplicación termina en LF (`\n`), omitido en las etiquetas; `5000` es el puerto predeterminado del servidor, sin afirmar una configuración física comprobada.
 
 #### 2.5.1 Registro y funcionamiento normal
 
-El escenario reproduce la [secuencia de registro y funcionamiento normal](docs/diagramas/Diseno_del_sistema.md#51-registro-y-funcionamiento-normal) del diseño:
+Se conserva la [secuencia normal del diseño](docs/diagramas/Diseno_del_sistema.md#51-registro-y-funcionamiento-normal), actualizando la identificación del servidor y la llamada de clasificación a Python.
 
 ```mermaid
 sequenceDiagram
     participant S as ESP32 sensor
     participant A as ESP32 actuador
-    participant PC as Servidor TCP (PC)
+    participant PC as Servidor TCP Python (PC)
 
     Note over S,PC: Ambos clientes se asocian al WiFi y abren su conexión TCP a la PC:5000
     S->>PC: REGISTER type=sensor
@@ -363,43 +503,43 @@ sequenceDiagram
 
     Note over S,PC: Ejemplos sucesivos: un POST cada 250 ms
     S->>PC: POST distance=45.00
-    PC->>PC: calcularComando(45.00): rango rojo
+    PC->>PC: ControlDistancia.calcular_comando(45.00): rango rojo
     PC->>A: SET redLed=blink_4 yellowLed=off greenLed=off
     A->>A: Alternar el rojo cada 125 ms
 
     S->>PC: POST distance=75.00
-    PC->>PC: calcularComando(75.00): rango amarillo
+    PC->>PC: ControlDistancia.calcular_comando(75.00): rango amarillo
     PC->>A: SET redLed=off yellowLed=blink_2 greenLed=off
     A->>A: Alternar el amarillo cada 250 ms
 
     S->>PC: POST distance=120.00
-    PC->>PC: calcularComando(120.00): rango verde
+    PC->>PC: ControlDistancia.calcular_comando(120.00): rango verde
     PC->>A: SET redLed=off yellowLed=off greenLed=on
     A->>A: Mantener el verde encendido
 
     S->>PC: POST distance=invalid
-    PC->>PC: calcularComando(NAN): todos apagados
+    PC->>PC: ControlDistancia.calcular_comando(NaN): todos apagados
     PC->>A: SET redLed=off yellowLed=off greenLed=off
     A->>A: Apagar los tres LEDs
 ```
 
-Antes del registro, ambos ESP32 deberán asociarse a la red WiFi y establecer sus conexiones TCP hacia la PC. Cada cliente enviará `REGISTER` como primer mensaje de aplicación: `REGISTER type=sensor` para el objeto de adquisición y `REGISTER type=actuator` para el de actuación. El servidor reservará cada rol en un socket distinto y responderá `OK`; el cliente deberá esperar esa confirmación antes de iniciar el intercambio operativo. `OK` confirma exclusivamente el registro, no cada lectura ni cada actuación.
+En el escenario completo, ambos ESP32 deberán asociarse a WiFi, abrir su conexión TCP hacia la PC y enviar `REGISTER type=sensor` o `REGISTER type=actuator`. Ese comportamiento y la espera de `OK` aún no existen en los clientes. El servidor Python sí acepta conexiones mediante `ServidorTcp`; `process_request()` crea la sesión y `ManejadorConexion.handle()` recibe bloques, utiliza el `ReceptorLineas` Python y entrega líneas completas a `EstadoSistema.procesar()`.
 
-El orden de registro podrá invertirse. En el ejemplo, el actuador se registra sin una lectura disponible y recibe `SET redLed=off yellowLed=off greenLed=off`. Si el sensor ya hubiera enviado una lectura, el servidor deberá aplicar el estado correspondiente cuando esa lectura sea válida y tenga menos de 2000 ms; si es inválida, antigua o inexistente, deberá ordenar el apagado. Mientras no exista un actuador registrado, el servidor conservará únicamente la última lectura y su tiempo de recepción.
+`leer_mensaje()` interpreta la línea y `EstadoSistema` reserva el rol si está disponible, actualiza la actividad y encola `OK`. La confirmación corresponde exclusivamente al registro. Al registrar el actuador, encola después un `SET` con el último comando si la lectura tiene menos de 2000 ms, o todos apagados si es antigua o inexistente. Una lectura reciente inválida también produce apagado porque su comando almacenado contiene los tres estados `off`. Ambos órdenes de registro están contemplados en el código.
 
-Una vez registrado, el sensor deberá enviar un `POST` con intervalo nominal de 250 ms. Para los ejemplos de 45.00, 75.00 y 120.00 cm, el servidor interpretará la lectura mediante `ProtocoloAplicacion`, calculará el comando mediante `ControlDistancia` y enviará, respectivamente, los estados rojo `blink_4`, amarillo `blink_2` o verde `on`, con los otros LEDs en `off`. El mensaje `POST distance=invalid` deberá producir un `SET` con los tres LEDs apagados. Estos ejemplos concretan el flujo de mensajes sin acreditar lecturas físicas ni tiempos medidos.
+El sensor deberá publicar nominalmente cada 250 ms cuando esté registrado. Para cada `POST` completo y válido, `EstadoSistema.procesar()` actualiza los tiempos y llama a `ControlDistancia.calcular_comando()` de `dominio.py`. En los ejemplos de 45.00, 75.00 y 120.00 cm produce rojo `blink_4`, amarillo `blink_2` y verde `on`, respectivamente; `distance=invalid` se interpreta como `math.nan` y produce todos apagados. `_actuar()` utiliza la función Python `crear_comando()` y encola `SET` si hay un actuador registrado. La cola añade LF mediante `codificar()` y conserva el progreso del envío parcial, que atiende el hilo de la conexión del actuador.
 
-Cada `POST` completo y válido, incluido el token `invalid`, deberá producir un `SET` si el actuador está registrado. El servidor enviará el comando incluso si coincide con el anterior. El ESP32 actuador deberá validar e interpretar el mensaje completo, entregar los tres estados a `ControladorLeds` y controlar localmente la temporización del parpadeo mediante `actualizar()`. La PC decidirá el modo, pero no enviará una orden por cada alternancia del GPIO. Los comandos idénticos deberán conservar la fase del modo vigente y el actuador no enviará una confirmación por cada lectura, conforme al protocolo diseñado.
+El servidor genera y encola un comando por lectura incluso si coincide con el anterior. Cuando no existe actuador registrado, conserva el último comando y el instante de la última lectura, sin acumular su historial. La aplicación de `SET`, la actualización local del parpadeo y la conservación de fase ante modos idénticos permanecen previstas para el ESP32 actuador. La PC decide el modo; no envía una orden por cada alternancia del GPIO. El protocolo no contempla una confirmación del actuador por cada lectura.
 
 #### 2.5.2 Ausencia de datos, desconexión y recuperación
 
-El segundo escenario reproduce la [secuencia de ausencia de datos y recuperación](docs/diagramas/Diseno_del_sistema.md#52-ausencia-de-datos-y-recuperación). Sus ramas describen situaciones alternativas después del registro; la rama del sensor presupone que existe un actuador registrado.
+Se conserva la [secuencia de recuperación del diseño](docs/diagramas/Diseno_del_sistema.md#52-ausencia-de-datos-y-recuperación). La rama del sensor presupone un actuador registrado. El apagado dibujado en el ESP32 es una acción física prevista; en el servidor existe la generación y el envío del comando correspondiente.
 
 ```mermaid
 sequenceDiagram
     participant S as ESP32 sensor
     participant A as ESP32 actuador
-    participant PC as Servidor TCP (PC)
+    participant PC as Servidor TCP Python (PC)
 
     Note over S,PC: Situaciones alternativas después del registro
     alt El servidor acumula 2000 ms sin un POST del sensor
@@ -429,21 +569,23 @@ sequenceDiagram
     end
 ```
 
-**Ausencia de lecturas del sensor.** El servidor deberá contar 2000 ms desde la recepción del último `POST` completo y válido; `POST distance=invalid` también reiniciará ese plazo porque comunica el estado del sensor. Si todavía no hubiera recibido una lectura después del registro, el tiempo se contará desde su aceptación. Al vencer el plazo, la PC invalidará la lectura almacenada, enviará todos apagados al actuador registrado y cerrará la conexión del sensor, liberando su rol. El ESP32 sensor, al detectar la desconexión, deberá reintentar la conexión WiFi/TCP cada 2000 ms y registrarse de nuevo.
+**Registro incompleto y errores, implementados en la PC.** `EstadoSistema.revisar_plazos()` rechaza con `not_registered` la sesión que no completa el registro en 2000 ms desde su aceptación. Un mensaje operativo válido antes del registro produce el mismo motivo; sintaxis inválida, segundo registro o mensaje incompatible con el rol producen `invalid_message`; un rol ocupado produce `role_busy` sin liberar al cliente original. `rechazar()` libera el rol de la sesión rechazada, encola `ERROR` y marca el cierre. El manejador deja de recibir nuevos mensajes y conserva la salida hasta enviarla o agotar el plazo de cierre de 2000 ms. Este plazo adicional de cierre no es un reintento de conexión.
 
-**Ausencia de comandos en el actuador.** El ESP32 actuador deberá medir 2000 ms desde el último `SET` completo y válido, o desde la finalización del registro mientras espera el primero. Al vencer ese plazo, apagará localmente los tres LEDs. Si el socket sigue abierto, deberá mantener la conexión y permanecer apagado hasta recibir un `SET` válido; la ausencia de comandos por sí sola no implica abrir otro socket. Esta protección local permite apagar las salidas aun cuando la desconexión del servidor todavía no haya sido detectada.
+**Ausencia de lecturas, implementada en la PC.** La actividad del sensor se mide desde el último `POST` completo y válido, incluido `distance=invalid`; si no ha publicado después del registro, se mide desde su aceptación como sensor. Los fragmentos incompletos no renuevan ese tiempo. Al alcanzar 2000 ms, `revisar_plazos()` llama a `liberar()` y señala la detención de la sesión. `liberar()` elimina el rol sensor, establece `ultima_lectura = None`, sustituye `ultimo_comando` por todos apagados y encola ese comando al actuador registrado. La conexión del sensor se cierra y el servidor puede aceptar posteriormente un registro nuevo.
 
-**Desconexión detectada.** Cuando el servidor detecte la desconexión del sensor, deberá invalidar inmediatamente sus datos, liberar el rol y ordenar el apagado al actuador registrado, sin esperar otros 2000 ms. Cuando el ESP32 actuador detecte la pérdida de su propia conexión, deberá apagar inmediatamente sus salidas. El envío desde la PC presupone que la conexión del actuador sigue disponible; si también se interrumpe, el apagado dependerá de la detección o del plazo local del actuador.
+**Desconexión detectada, implementada en la PC.** Cuando `recv()` devuelve ausencia de datos por cierre, o se produce un error del socket, el manejador finaliza y libera la sesión. Si era el sensor, invalida el estado y encola apagado sin esperar el plazo de ausencia de lecturas. Si era el actuador, libera su rol y conserva la información reciente del sensor. Encolar o enviar apagado no demuestra que un LED físico se haya apagado: depende de una conexión disponible y del futuro firmware. Una cola saturada detiene y libera su sesión; un fallo durante el envío también conduce al cierre.
 
-**Reintento y nuevo registro.** Los ESP32 desconectados deberán reintentar WiFi/TCP cada 2000 ms, crear un socket nuevo y repetir `REGISTER` / `OK`. Los roles de conexiones cerradas deberán quedar liberados, y los fragmentos de mensajes, buffers y temporizadores de conexión se reiniciarán conforme al diseño. El registro tiene un plazo de 2000 ms: el servidor cerrará una conexión sin `REGISTER` completo dentro de ese tiempo, y el cliente cerrará y reintentará si no recibe `OK` dentro del plazo previsto. Estos tiempos se miden localmente, sin requerir relojes sincronizados entre equipos.
+**Ausencia de comandos y desconexión local, pendientes en el actuador.** El ESP32 deberá apagar sus tres LEDs ante la pérdida detectada de conexión o tras 2000 ms sin un `SET` completo y válido. Si únicamente faltan comandos y el socket permanece abierto, deberá mantenerse conectado y apagado hasta recibir uno válido. Este watchdog y el apagado físico son responsabilidades futuras del actuador; no los ejecuta el servidor Python.
 
-**Restauración mediante un comando válido.** Tras el nuevo registro del sensor, una lectura como `POST distance=120.00` deberá producir el comando verde encendido que muestra el diagrama, si el actuador está registrado. Tras el nuevo registro del actuador, el servidor deberá enviar inmediatamente el comando correspondiente a la última lectura válida de menos de 2000 ms, o todos apagados si la lectura es inválida, antigua o inexistente. Un nuevo `SET` válido restablecerá los modos; después de un apagado por ausencia de datos, los parpadeos deberán comenzar desde encendido. Esta recuperación no supone reutilizar una lectura cuya vigencia haya vencido.
+**Reintentos y nuevo registro, pendientes en ambos ESP32.** Los clientes deberán reintentar WiFi/TCP cada 2000 ms, abrir un socket nuevo, descartar fragmentos y repetir `REGISTER` / `OK`. También deberán cerrar y reintentar si no reciben `OK` dentro de su plazo de registro. El servidor implementa la aceptación y el registro posterior, pero no realiza los reintentos locales de los clientes. Cada sesión nueva en Python crea un receptor y una cola nuevos; en el futuro cliente C++, `ReceptorLineas.reiniciar()` permitirá descartar el estado de la conexión anterior.
 
-Las secuencias son coherentes con la clasificación en `ControlDistancia`, el intercambio gestionado por las clases TCP y la ejecución local en `ControladorLeds`. Las actividades de supervisión y recuperación requieren detalles internos no mostrados en el diagrama de clases, que deberán contrastarse con las interfaces y el código finales. PV-06, PV-12 a PV-16 y sus evidencias permitirán verificar los escenarios de registro y recuperación; el flujo normal y la continuidad del parpadeo se relacionan con PV-01 a PV-05.
+**Restauración del comando, implementada en la PC; restauración física pendiente.** Un sensor nuevamente registrado puede publicar una lectura y producir el `SET` mostrado en el diagrama. Un actuador nuevamente registrado recibe `OK` y el último comando si su lectura tiene menos de 2000 ms; recibe todos apagados cuando la lectura es inválida, antigua o inexistente. La caducidad se calcula con tiempo monótono del servidor. El ESP32 todavía deberá ejecutar el comando válido y, tras un apagado por ausencia de datos, comenzar los parpadeos desde encendido, según el diseño. Los plazos son constantes del código y del comportamiento objetivo, no mediciones obtenidas en esta iteración.
+
+Las secuencias conservan la separación entre interpretación, clasificación, administración de sesión y ejecución física. PV-01 a PV-06 y PV-12 a PV-16 siguen como referencias para validar los recorridos; PV-07 a PV-11 cubren roles ocupados, delimitación y rechazo. La presencia de las operaciones del servidor no implica que estos casos ya estén aprobados ni que los componentes ESP32 pendientes funcionen.
 
 **Correspondencia de las secuencias con los registros reales de intercambio:** [PENDIENTE DE EVIDENCIA]
 
-**Implementación de los mecanismos de registro, supervisión y recuperación:** [PENDIENTE DE IMPLEMENTACIÓN]
+**Mecanismos locales de registro, supervisión, apagado y recuperación de los ESP32:** [PENDIENTE DE IMPLEMENTACIÓN]
 
 ### 2.6 Protocolo de aplicación TCP
 
