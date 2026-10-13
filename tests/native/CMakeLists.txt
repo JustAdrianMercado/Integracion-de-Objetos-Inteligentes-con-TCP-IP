@@ -16,13 +16,40 @@ target_link_libraries(verificar_contrato PRIVATE Compartido)
 
 add_executable(pruebas_sensor_ultrasonico
     sensor_ultrasonico.cpp
-    "${PROJECT_SOURCE_DIR}/apps/firmware/src/SensorUltrasonico.cpp"
+    "${PROJECT_SOURCE_DIR}/apps/firmware/src/cliente/SensorUltrasonico.cpp"
 )
 target_include_directories(pruebas_sensor_ultrasonico PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/fakes"
     "${PROJECT_SOURCE_DIR}/apps/firmware/include"
 )
 add_test(NAME sensor_ultrasonico COMMAND pruebas_sensor_ultrasonico)
+
+add_library(red_simulada STATIC fakes/RedSimulada.cpp)
+target_include_directories(red_simulada PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/fakes")
+
+add_library(cliente_tcp_simulado STATIC
+    "${PROJECT_SOURCE_DIR}/apps/firmware/src/cliente/ClienteTcp.cpp"
+)
+target_include_directories(cliente_tcp_simulado PUBLIC "${PROJECT_SOURCE_DIR}/apps/firmware/include")
+target_link_libraries(cliente_tcp_simulado PUBLIC Compartido red_simulada)
+
+add_executable(pruebas_cliente_tcp cliente_tcp.cpp)
+target_link_libraries(pruebas_cliente_tcp PRIVATE cliente_tcp_simulado)
+add_test(NAME cliente_tcp COMMAND pruebas_cliente_tcp)
+
+add_library(firmware_sensor_simulado STATIC
+    "${PROJECT_SOURCE_DIR}/apps/firmware/src/cliente/PrincipalSensor.cpp"
+    "${PROJECT_SOURCE_DIR}/apps/firmware/src/cliente/SensorUltrasonico.cpp"
+)
+target_include_directories(firmware_sensor_simulado BEFORE PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/fakes/configuracion")
+target_link_libraries(firmware_sensor_simulado PUBLIC cliente_tcp_simulado)
+
+add_executable(pruebas_principal_sensor principal_sensor.cpp)
+target_link_libraries(pruebas_principal_sensor PRIVATE firmware_sensor_simulado)
+add_test(NAME principal_sensor COMMAND pruebas_principal_sensor)
+
+add_executable(puente_sensor puente_sensor.cpp)
+target_link_libraries(puente_sensor PRIVATE firmware_sensor_simulado)
 
 find_package(Python3 3.13 QUIET COMPONENTS Interpreter)
 if(Python3_FOUND)
@@ -31,7 +58,7 @@ if(Python3_FOUND)
     )
     set_tests_properties(servidor_python PROPERTIES
         WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
-        ENVIRONMENT "IOT_CONTRACT_EXE=$<TARGET_FILE:verificar_contrato>"
+        ENVIRONMENT "IOT_CONTRACT_EXE=$<TARGET_FILE:verificar_contrato>;IOT_SENSOR_EXE=$<TARGET_FILE:puente_sensor>"
         TIMEOUT 90
     )
 else()
