@@ -63,9 +63,8 @@ int main() {
         comprobar(!cliente.estaRegistrado(), "Conservar fragmentos sin aceptar OK hasta LF");
         red.entrada = "\n"; cliente.actualizar();
         comprobar(cliente.estaRegistrado() && cliente.puedeEnviar(), "OK completo habilita las lecturas");
-        comprobar(!cliente.enviar(nullptr) && !cliente.enviar("POST distance=0") &&
-                  !cliente.enviar("POST distance=45.00\n") && !cliente.enviar("REGISTER type=sensor"),
-                  "Rechazar contenido invalido o incompatible sin ponerlo en la cola");
+        comprobar(!cliente.enviar(nullptr) && !cliente.enviar("REGISTER type=sensor"),
+                  "La aplicacion solo publica POST");
         red.salida.clear();
         red.maximoEnvio = 3;
         comprobar(cliente.enviar("POST distance=45.00"), "Encolar una lectura registrada");
@@ -223,10 +222,13 @@ int main() {
                   "Procesar OK y SET juntos sin perder el comando");
         red.entrada = "SET redLed=on yellowLed=off "; cliente.actualizar();
         comprobar(!cliente.recibir(salida, sizeof(salida)), "SET fragmentado espera su LF");
-        red.entrada = "greenLed=off\n" + std::string(APAGADO) + '\n'; cliente.actualizar();
-        comprobar(cliente.recibir(salida, sizeof(salida)) && std::string(salida) == "SET redLed=on yellowLed=off greenLed=off", "Retirar los SET en orden");
-        comprobar(cliente.recibir(salida, sizeof(salida)) && std::string(salida) == APAGADO,
-                  "Conservar una segunda linea del mismo bloque");
+        red.entrada = "greenLed=off\n"; cliente.actualizar();
+        comprobar(cliente.recibir(salida, sizeof(salida)) && std::string(salida) == "SET redLed=on yellowLed=off greenLed=off",
+                  "Entregar el SET al completar su LF");
+        comprobar(!cliente.recibir(salida, sizeof(salida)), "Cada SET se entrega una sola vez");
+        red.entrada = "SET redLed=on yellowLed=off greenLed=off\n" + std::string(APAGADO) + '\n'; cliente.actualizar();
+        comprobar(cliente.recibir(salida, sizeof(salida)) && std::string(salida) == APAGADO &&
+                  !cliente.recibir(salida, sizeof(salida)), "Con dos SET en un bloque gana el ultimo");
         red.entrada = "SET redLed=on yellowLed=off greenLed=invalido\n"; cliente.actualizar();
         comprobar(!red.tcpAbierto && !cliente.recibir(salida, sizeof(salida)), "No entregar comandos parcialmente validos");
     }
@@ -234,7 +236,9 @@ int main() {
         reiniciar();
         auto cliente = crearCliente(TipoCliente::Actuador); registrar(cliente);
         for (int i = 0; i < 5; ++i) { red.entrada = std::string(APAGADO) + '\n'; cliente.actualizar(); }
-        comprobar(!red.tcpAbierto, "Limitar los SET pendientes si la aplicacion no los consume");
+        char salida[128];
+        comprobar(red.tcpAbierto && cliente.recibir(salida, sizeof(salida)) && !cliente.recibir(salida, sizeof(salida)),
+                  "SET no consumidos se reemplazan sin cerrar la conexion");
     }
     for (int caso = 0; caso < 4; ++caso) {
         reiniciar();

@@ -4,9 +4,10 @@
 #include <WiFiClient.h>
 
 #include "ReceptorLineas.h"
-#include "TipoCliente.h"
+#include "Tipos.h"
 
-// Una instancia por ESP32. Los textos de configuracion deben vivir tanto como ella.
+// Conexion WiFi/TCP comun a ambos ESP32. Se atiende sin bloqueo llamando actualizar()
+// en cada vuelta de loop(). Los textos de configuracion deben vivir tanto como el cliente.
 class ClienteTcp {
 public:
     ClienteTcp(TipoCliente tipo, const char* ssid, const char* clave,
@@ -15,9 +16,9 @@ public:
     void actualizar();
     bool estaRegistrado() const;
     bool puedeEnviar() const;
-    // Acepta un POST sin LF ni NUL transmitido. Solo conserva un envio pendiente.
+    // Sensor: encola un POST sin LF. Solo existe un envio pendiente a la vez.
     bool enviar(const char* contenido);
-    // El actuador retira SET completos y validados en orden.
+    // Actuador: entrega el ultimo SET completo recibido, sin LF.
     bool recibir(char* linea, size_t capacidad);
 
 private:
@@ -28,7 +29,6 @@ private:
     static constexpr uint32_t PLAZO_REGISTRO_MS = 2000;
     static constexpr uint32_t PLAZO_ENVIO_MS = 2000;
     static constexpr int32_t TIMEOUT_CONEXION_MS = 1000;
-    static constexpr size_t CAPACIDAD_RECEPCIONES = 4;
 
     TipoCliente tipo_;
     const char* ssid_;
@@ -48,9 +48,8 @@ private:
     char envio_[ProtocoloAplicacion::CapacidadBuffer] = {};
     size_t longitudEnvio_ = 0;
     size_t enviados_ = 0;
-    char recibidas_[CAPACIDAD_RECEPCIONES][ProtocoloAplicacion::CapacidadBuffer] = {};
-    size_t primeraRecibida_ = 0;
-    size_t cantidadRecibidas_ = 0;
+    char comando_[ProtocoloAplicacion::CapacidadBuffer] = {};
+    bool hayComando_ = false;
 
     void limpiarBuffers();
     void cerrar(uint32_t ahora, const char* motivo);

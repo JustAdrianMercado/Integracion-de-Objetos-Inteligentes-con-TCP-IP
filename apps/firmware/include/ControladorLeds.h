@@ -2,7 +2,7 @@
 
 #include <Arduino.h>
 
-#include "ComandoLeds.h"
+#include "Tipos.h"
 
 // Aplica en los GPIO los estados ordenados por el servidor. No clasifica distancias.
 class ControladorLeds {

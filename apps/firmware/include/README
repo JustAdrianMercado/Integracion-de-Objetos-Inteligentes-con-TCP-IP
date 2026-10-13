@@ -1,5 +1,0 @@
-Declaraciones de las clases del firmware ESP32.
-
-Las implementaciones están en apps/firmware/src/.
-PlatformIO utiliza este directorio mediante include_dir = apps/firmware/include.
-El código reutilizable entre la PC y los ESP32 está en packages/Compartido/src/.

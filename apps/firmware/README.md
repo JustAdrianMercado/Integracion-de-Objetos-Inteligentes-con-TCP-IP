@@ -4,9 +4,19 @@
 |---|---|---|
 | `sensor` (predeterminado) | ESP32 DEVKIT V1 de 30 pines (`esp32doit-devkit-v1`) | Mide con el HC-SR04 y publica `POST` al servidor Python. |
 | `actuador` | ESP32 genérico de 38 pines (`esp32dev`) | Recibe `SET` del servidor y aplica los estados de los tres LEDs. |
-| `esp32doit-devkit-v1` | ESP32 DEVKIT V1 | Programa local de referencia de la Práctica 1. |
 
 El servidor decide los estados de los LEDs: el sensor no clasifica distancias y el actuador solo ejecuta los comandos recibidos.
+
+| Archivo | Responsabilidad |
+|---|---|
+| `src/PrincipalSensor.cpp` | `setup`/`loop` del sensor: mide cada 250 ms y publica `POST`. |
+| `src/PrincipalActuador.cpp` | `setup`/`loop` del actuador: aplica cada `SET` y apaga sin comandos durante 2 s. |
+| `src/ClienteTcp.cpp` | WiFi, conexión TCP, registro, envío y recepción, común a ambos. |
+| `src/SensorUltrasonico.cpp` | Pulso TRIG y medición del eco del HC-SR04. |
+| `src/ControladorLeds.cpp` | Estados `off`, `on`, `blink_2` y `blink_4` de los tres LEDs sin bloquear. |
+| `lib/Compartido/Tipos.h` | `TipoCliente`, `EstadoLed` y `ComandoLeds`. |
+| `lib/Compartido/ProtocoloAplicacion.cpp` | Crea `REGISTER` y `POST`; interpreta `SET`. |
+| `lib/Compartido/ReceptorLineas.cpp` | Junta los bytes recibidos hasta el LF y rechaza líneas inválidas. |
 
 ## Configurar la red
 
@@ -30,6 +40,8 @@ Editar el archivo copiado; ambas placas usan el mismo:
 `ConfiguracionRed.h` está excluido de Git. Sin ese archivo se utiliza el ejemplo vacío: el proyecto compila, pero la consola pide completar la configuración y no intenta conexiones.
 
 ## Red para la demo
+
+El paso a paso completo del montaje y la puesta en marcha está en la [guía de montaje](../../docs/GUIA_MONTAJE.md).
 
 - **Firewall de Windows:** permitir conexiones entrantes TCP 5000. Desde una PowerShell de administrador:
 
@@ -112,7 +124,7 @@ Con lecturas, el actuador muestra rojo `blink_4` por debajo de 50 cm, amarillo `
 
 ### Actuador
 
-- `ClienteTcp` valida cada `SET` completo y conserva hasta cuatro en orden; `PrincipalActuador` los consume en cada vuelta y los entrega a `ControladorLeds`.
+- `ClienteTcp` valida cada `SET` completo y guarda el último; `PrincipalActuador` lo retira en cada vuelta y lo entrega a `ControladorLeds`.
 - Los tres estados se aplican juntos. `blink_2` alterna cada 250 ms (2 ciclos/s) y `blink_4` cada 125 ms (4 ciclos/s); un parpadeo nuevo empieza encendido y un `SET` idéntico conserva la fase.
 - Desconexión, `ERROR` o `SET` inválido cierran la conexión y apagan los LEDs al instante. Con 2000 ms sin `SET` completo se apagan manteniendo la conexión; el siguiente `SET` los reactiva.
 
@@ -120,10 +132,6 @@ En la consola de cada ESP32 se verán intentos WiFi/TCP, `Registro aceptado (OK)
 
 ## Validación
 
-Las [pruebas nativas](../../tests/native) compilan `ClienteTcp.cpp`, `PrincipalSensor.cpp`, `PrincipalActuador.cpp` y `ControladorLeds.cpp` con WiFi, GPIO y reloj simulados. Verifican registro, cadencia, estados y frecuencias de los LEDs, fragmentos, escrituras parciales, fallos, plazos y desbordamiento de `millis()`.
+Las [pruebas nativas](../../tests/native) compilan este mismo código en la PC con WiFi, sockets, reloj y GPIO simulados (`tests/native/fakes`). Verifican el protocolo, el receptor de líneas, `ClienteTcp` (registro, reintentos, envíos parciales, errores y plazos), ambos principales (cadencia, `SET` fragmentado, plazo de 2 s, desconexiones) y `ControladorLeds` (estados, frecuencias, fase y desbordamiento de `millis()`). Se ejecutan con CTest; ver la [sección de pruebas](../../README.md#pruebas).
 
-CTest también ejecuta los flujos entre C++ y Python ([sensor](../../tests/python/test_sensor.py) y [actuador](../../tests/python/test_actuador.py)): un puente entrega los bytes del mismo firmware al servidor mediante sockets TCP reales. Se comprueban los tres rangos, lectura inválida, desconexiones, reinicio del servidor, pérdida de WiFi simulada y el plazo sin comandos del actuador. Los puentes existen únicamente en la construcción de pruebas.
-
-Ejecutar la [suite del monorepo](../../README.md#pruebas) desde una terminal de desarrollo. En `unittest` por separado, los flujos del firmware se omiten si no se proporcionan `IOT_SENSOR_EXE` e `IOT_ACTUATOR_EXE`; CTest los configura automáticamente.
-
-La compilación y las simulaciones están verificadas. La asociación WiFi, la consola serie, las medidas y el parpadeo sobre las placas reales quedan por comprobar con la configuración y el montaje locales.
+La compilación y las simulaciones están verificadas. La asociación WiFi, la consola serie, las medidas y el parpadeo sobre las placas reales quedan por comprobar con el montaje (etapa 7).

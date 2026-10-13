@@ -3,9 +3,10 @@
 import argparse
 import ipaddress
 import logging
+from pathlib import Path
 import socket
 
-from .servidor import INTERVALO_ATENCION, ServidorTcp
+from .servidor import ServidorTcp
 
 
 def puerto_valido(texto):
@@ -35,8 +36,15 @@ def main():
     argumentos = argparse.ArgumentParser(description="Servidor TCP de sensor y actuador ESP32")
     argumentos.add_argument("--ip", type=ipv4_valida, default="0.0.0.0")
     argumentos.add_argument("--puerto", type=puerto_valido, default=5000)
+    argumentos.add_argument("--registro", type=Path,
+                            help="Archivo donde guardar tambien el registro (evidencia de las pruebas)")
     opciones = argumentos.parse_args()
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    destinos = [logging.StreamHandler()]
+    if opciones.registro is not None:
+        opciones.registro.parent.mkdir(parents=True, exist_ok=True)
+        destinos.append(logging.FileHandler(opciones.registro, encoding="utf-8"))
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s",
+                        handlers=destinos)
     try:
         with ServidorTcp((opciones.ip, opciones.puerto)) as servidor:
             logging.info("Servidor TCP escuchando en %s:%s", *servidor.server_address)
@@ -45,7 +53,7 @@ def main():
                 logging.info("IPv4 de esta PC para IP_SERVIDOR: %s",
                              ", ".join(locales) if locales else "consultar con ipconfig")
             try:
-                servidor.serve_forever(poll_interval=INTERVALO_ATENCION)
+                servidor.serve_forever()
             except KeyboardInterrupt:
                 logging.info("Deteniendo servidor")
     except OSError as error:
