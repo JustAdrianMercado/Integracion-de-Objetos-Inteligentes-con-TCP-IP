@@ -1,137 +1,228 @@
-# Informe técnico — Práctica 1
+# Informe técnico — Práctica 2
 
-**Actividad:** Integración de sensores y actuadores en un objeto inteligente  
-**Asignatura:** SIS-234  
-**Grupo:** 8  
-**Plataforma:** ESP32 / ESP-WROOM-32
+**Actividad:** Integración de Objetos Inteligentes con TCP/IP
+
+**Asignatura:** SIS-234 — Internet de las Cosas
+
+**Grupo:** 8
+
+**Integrantes:** Santiago Javier Torres Vacaflores y Ariel Adrian Mercado Alegre
+
+**Plataformas previstas:** dos ESP32 / ESP-WROOM-32 y una PC Windows
+
+**Estado del documento:** primera iteración; estructura documental
 
 ## Introducción
 
-La práctica consiste en integrar un sensor, actuadores y un microcontrolador dentro de un objeto inteligente. El prototipo desarrollado utiliza un sensor ultrasónico HC-SR04 para medir la distancia a un objeto y tres LEDs para representar visualmente el rango detectado. El ESP32 procesa cada lectura, selecciona el rango correspondiente y mantiene el parpadeo de los LEDs sin detener el ciclo principal del programa.
+La [consigna de la Práctica 2](docs/consigna/Práctica_2.md) exige integrar un objeto inteligente con sensor ultrasónico, otro con actuadores y un servidor TCP central mediante WiFi (IEEE 802.11). El [diseño propuesto](docs/diagramas/Diseno_del_sistema.md) contempla un HC-SR04, tres LEDs y una PC que clasifica las distancias y envía comandos de actuación.
 
-Este documento presenta los requerimientos, el diseño de hardware y software, la implementación y las validaciones realizadas. Las pruebas funcionales, de exactitud y de estabilidad se efectuaron físicamente; el tiempo de respuesta y la frecuencia de muestreo se validaron de forma lógica a partir de la temporización configurada en el firmware.
+Este informe prepara la organización, la trazabilidad y los registros necesarios para documentar el trabajo por iteraciones. Las descripciones de arquitectura, clases, protocolo y pruebas corresponden a un diseño previo a la implementación. Los resultados de la Práctica 1 se conservan en [INFORME_P1.md](docs/historico/INFORME_P1.md) como referencia de organización y profundidad; no acreditan el funcionamiento del sistema distribuido de la Práctica 2.
+
+Los marcadores indican información por incorporar: `[PENDIENTE DE IMPLEMENTACIÓN]` para desarrollo y revisión del código, `[PENDIENTE DE MEDICIÓN]` para datos experimentales y `[PENDIENTE DE EVIDENCIA]` para registros verificables. Un resultado esperado es un criterio de prueba, no un resultado obtenido.
 
 ## Objetivo general
 
-Diseñar e implementar un sistema basado en ESP32 que mida distancias con un HC-SR04, clasifique las lecturas en rangos contiguos y controle tres LEDs de acuerdo con el rango detectado, mediante una solución modular, orientada a objetos y susceptible de validación experimental.
-
-## Descripción del sistema
-
-El HC-SR04 recibe un pulso de disparo del ESP32 y devuelve por ECHO un pulso cuya duración representa el tiempo de vuelo del sonido. El firmware convierte esa duración a centímetros y clasifica el resultado. Los LEDs rojo, amarillo y verde actúan como indicadores. Cuando la distancia supera 25 cm, los tres parpadean simultáneamente; si la lectura es inválida o se produce un timeout, todos permanecen apagados.
-
-El pin ECHO del sensor opera a una tensión superior a la admitida directamente por el ESP32. Por ello se utiliza un divisor resistivo formado por una resistencia de 2.2 kΩ en la parte superior y dos resistencias de 2.2 kΩ en serie hacia tierra.
+Diseñar, implementar y validar un sistema distribuido que mida distancias con un sensor ultrasónico, las procese en un servidor TCP y controle tres LEDs en un objeto inteligente independiente, mediante sockets TCP sobre WiFi y un protocolo de aplicación definido por el grupo.
 
 ## 1. Requerimientos Funcionales y No Funcionales
 
-### 1.1 Requerimientos funcionales
+Esta sección establece las condiciones que deberá satisfacer el sistema distribuido. Los requerimientos funcionales RF1–RF4 mantienen la numeración y el alcance de la [consigna oficial](docs/consigna/Práctica_2.md); los criterios de aceptación concretan las decisiones del [diseño del equipo](docs/diagramas/Diseno_del_sistema.md). Los requerimientos no funcionales RNF1–RNF5 declaran los atributos de calidad y sus métodos de verificación.
 
-| Identificador | Requerimiento | Criterio de aceptación | Elemento responsable |
+La adquisición y el envío de distancia corresponden al ESP32 sensor; la recepción, clasificación y generación de comandos corresponden al servidor TCP en la PC; la recepción y ejecución de esos comandos corresponden al ESP32 actuador. Esta distribución sitúa el algoritmo de control en el servidor, conforme a la consigna. Las clases citadas representan responsabilidades previstas y deberán contrastarse con el código final.
+
+### 1.1 Requerimientos funcionales y criterios de aceptación
+
+| ID | Funcionalidad requerida | Criterio de aceptación | Componente responsable según el diseño | Estado de implementación |
+|---|---|---|---|---|
+| RF1 | Medir la distancia entre el sensor ultrasónico HC-SR04 y un objeto. | Obtener lecturas finitas positivas expresadas en centímetros y contrastarlas con una referencia física mediante PN-02. Ante timeout de ECHO o valor no válido, identificar la lectura como inválida, según PV-04; la tolerancia de medición se evalúa en RNF2. | ESP32 sensor: `SensorUltrasonico` y programa principal de adquisición. | [PENDIENTE DE IMPLEMENTACIÓN] |
+| RF2 | Interpretar cada distancia válida y clasificarla en tres rangos contiguos y sin solapamiento. | Asignar cada distancia finita positiva a exactamente un rango de §1.2. Las entradas de PV-01 a PV-03, incluidos 49.99, 50, 99.99 y 100 cm, deben producir la clasificación prevista y el comando correspondiente. | Servidor TCP en PC: `ControlDistancia`, coordinado por `ServidorTcp`. | [PENDIENTE DE IMPLEMENTACIÓN] |
+| RF3 | Activar los tres LEDs del objeto actuador en función del rango, con un comportamiento distinto por rango. | Aplicar el comando completo según §1.2: rojo a 4 Hz, amarillo a 2 Hz o verde fijo, con los demás LEDs apagados; una lectura inválida debe producir todos apagados. Verificar estos estados mediante PV-01 a PV-04 y la continuidad de fase ante comandos idénticos mediante PV-05. | Servidor TCP: generación de `ComandoLeds`; ESP32 actuador: recepción y ejecución mediante `ControladorLeds`. | [PENDIENTE DE IMPLEMENTACIÓN] |
+| RF4 | Enviar lecturas desde el objeto sensor al servidor y comandos desde el servidor al objeto actuador mediante sockets TCP sobre WiFi (IEEE 802.11), utilizando un protocolo de aplicación definido por el grupo. | Establecer una conexión de cada ESP32 hacia la PC, completar `REGISTER` / `OK` y comprobar con registros el recorrido integrado `POST` → clasificación en servidor → `SET` → actuación física. Los mensajes deben respetar la especificación de §2.6; PV-06 a PV-16 verificarán registro, delimitación, rechazo de errores y recuperación previstos. | ESP32 sensor y actuador: `ClienteTcp` y sus programas principales; PC: `ServidorTcp`; codificación e interpretación: `ProtocoloAplicacion`. | [PENDIENTE DE IMPLEMENTACIÓN] |
+
+Los criterios se relacionan con el diseño y las validaciones mediante la matriz de §2.7. Las pruebas con entradas controladas al servidor permitirán verificar los límites exactos de RF2 sin confundirlos con el error físico del sensor; las pruebas del recorrido integrado comprobarán conjuntamente adquisición, comunicación y actuación. La revisión del código final y las evidencias de §4 serán necesarias para declarar el cumplimiento de cada requisito.
+
+### 1.2 Rangos y lógica de control propuestos
+
+Para la clasificación, se considera válida una distancia finita mayor que cero, expresada en centímetros. El servidor deberá aplicar la siguiente lógica y generar un comando con los estados de los tres LEDs:
+
+| Distancia recibida | LED rojo | LED amarillo | LED verde |
 |---|---|---|---|
-| RF1 | Medir la distancia entre el HC-SR04 y un objeto. | El sistema obtiene una lectura en centímetros aproximadamente cada 250 ms y la presenta por Serial cuando es válida. | `SensorUltrasonico` y `main.cpp` |
-| RF2 | Clasificar cada distancia válida en rangos contiguos y sin solapamiento. | Toda distancia mayor que cero pertenece exactamente a uno de los cuatro rangos definidos. | `ControladorLeds` |
-| RF3 | Controlar los LEDs de acuerdo con el rango detectado. | Se activa el patrón de parpadeo correspondiente de acuerdo con la tabla de rangos. | `ControladorLeds` |
-| RF4 | Tratar claramente una lectura inválida. | Ante un timeout o una distancia no válida, se informa el estado por Serial y todos los LEDs permanecen apagados. | `SensorUltrasonico`, `ControladorLeds` y `main.cpp` |
+| Lectura inválida | Apagado | Apagado | Apagado |
+| 0 < distancia < 50 cm | Parpadeo a 4 Hz | Apagado | Apagado |
+| 50 ≤ distancia < 100 cm | Apagado | Parpadeo a 2 Hz | Apagado |
+| distancia ≥ 100 cm | Apagado | Apagado | Encendido fijo |
 
-### 1.2 Rangos y lógica de control
+Los intervalos válidos son `(0, 50)`, `[50, 100)` y `[100, +∞)`. El valor 50 cm pertenece únicamente al rango amarillo y 100 cm únicamente al verde: cada límite se excluye del intervalo anterior y se incluye en el siguiente. De esta forma, no existen huecos ni solapamientos para las distancias finitas positivas. La lectura inválida constituye un estado de tratamiento de error, no un cuarto rango de distancia.
 
-| Distancia medida | Rango interno | Comportamiento esperado |
-|---|---|---|
-| Lectura inválida o timeout | `Invalido` | Todos los LEDs apagados |
-| 0 < distancia ≤ 5 cm | `Rojo` | LED rojo parpadeando |
-| 5 < distancia ≤ 15 cm | `Amarillo` | LED amarillo parpadeando |
-| 15 < distancia ≤ 25 cm | `Verde` | LED verde parpadeando |
-| distancia > 25 cm | `Lejos` | Los tres LEDs parpadeando simultáneamente |
+En el protocolo, `off` representa apagado y `on` encendido fijo. `blink_4` representa cuatro ciclos completos por segundo: un período de 250 ms, con 125 ms encendido y 125 ms apagado. `blink_2` representa dos ciclos completos por segundo: un período de 500 ms, con 250 ms encendido y 250 ms apagado. Estas frecuencias describen ciclos completos, no el número de alternancias del GPIO. Al comenzar un modo de parpadeo, el LED deberá encenderse; si se recibe de nuevo el mismo modo, deberá conservar su fase y temporización para que el envío periódico de comandos no reinicie el patrón.
 
-Los cuatro intervalos válidos son contiguos y no se solapan. Los valores 5, 15 y 25 cm se incluyen en el intervalo inferior correspondiente, tal como indican las desigualdades de la tabla.
+Un timeout de ECHO, una lectura no finita o una distancia menor o igual que cero deberán normalizarse en el objeto sensor como `POST distance=invalid`. El servidor deberá interpretar ese mensaje como una lectura inválida y enviar `SET` con los tres estados `off`. El token `invalid` es válido dentro del protocolo; un mensaje mal formado o una distancia numérica cero o negativa recibida directamente se rechazarán conforme a sus reglas. Esta distinción evita tratar un fallo de comunicación como una medición válida.
+
+El diseño también prevé el apagado al iniciar el actuador, ante una desconexión detectada y tras 2000 ms de ausencia de lecturas en el servidor o de comandos en el actuador, según corresponda. El registro de roles, el rechazo de mensajes y la reconexión son comportamientos complementarios de RF3 y RF4, especificados en §2.6 y cubiertos por PV-06 a PV-16; no se incorporan como requerimientos funcionales adicionales.
+
+El dominio de clasificación no impone un límite superior de 150 cm ni excluye valores positivos inferiores a 3 cm. En cambio, **3 a 150 cm es el intervalo previsto para validar físicamente la exactitud** de RNF2. La cobertura lógica de los rangos no demuestra que el sensor cumpla la tolerancia fuera de ese intervalo ni que ya la cumpla dentro de él. Su cobertura experimental y sus resultados permanecen `[PENDIENTE DE MEDICIÓN]` y `[PENDIENTE DE EVIDENCIA]`.
 
 ### 1.3 Requerimientos no funcionales
 
-| Identificador | Atributo | Requerimiento medible | Método previsto de verificación |
-|---|---|---|---|
-| RNF1 | Estabilidad | Operar al menos 10 minutos continuos sin reinicios ni bloqueos. | Observación del prototipo y registro continuo de la salida Serial. |
-| RNF2 | Exactitud | Mantener un error máximo absoluto menor o igual a 3 cm respecto de una referencia física dentro del intervalo validado de 3 cm a 30 cm. | Comparación con una regla graduada en centímetros en las distancias de prueba comprendidas entre 3 cm y 30 cm. |
-| RNF3 | Tiempo de respuesta | Reflejar un cambio de rango en los actuadores en un tiempo menor o igual a 1 segundo. | Análisis lógico del intervalo de medición, el timeout máximo y el flujo no bloqueante. |
-| RNF4 | Frecuencia de muestreo | Producir al menos 2 lecturas por segundo. | Cálculo lógico a partir del intervalo configurado y del escenario conservador con timeout. |
-| RNF5 | Calidad del código | Mantener código legible, modular, orientado a objetos y documentado con comentarios breves y útiles. | Revisión de la estructura, nombres, responsabilidades y dependencias del código fuente. |
+Los cuatro atributos cuantitativos adoptan los valores de referencia de la consigna como objetivos del equipo. RNF5 concreta la exigencia de código legible, modular, orientado a objetos y documentado mediante una revisión verificable. Su alcance incluye ambos firmwares y el servidor.
 
-RNF1 y RNF2 se validaron experimentalmente y quedaron documentados. RNF3 y RNF4 se justificaron lógicamente a partir del código y sus constantes de temporización, sin que esto constituya una medición física.
+| ID | Atributo de calidad | Criterio de aceptación | Método de verificación | Componente o alcance afectado | Estado de validación |
+|---|---|---|---|---|---|
+| RNF1 | Estabilidad | Operar durante al menos 10 minutos continuos, con cero reinicios y cero bloqueos, manteniendo la adquisición, el intercambio TCP y la respuesta de los LEDs. | PN-01: registrar inicio, fin y eventos de los tres equipos; observar continuidad de lecturas y actuación, y documentar cualquier interrupción. | Sistema distribuido completo: ESP32 sensor, servidor TCP y ESP32 actuador. | [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA] |
+| RNF2 | Exactitud de medición | Mantener un error absoluto máximo ≤ 3 cm respecto de una referencia física dentro del intervalo previsto de 3 a 150 cm. | PN-02: comparar lecturas individuales con una regla o cinta métrica en posiciones que cubran los tres rangos y los extremos del intervalo; calcular el valor absoluto de cada diferencia y su máximo. Registrar referencias, repeticiones y condiciones del ensayo. | HC-SR04, circuito y adquisición del ESP32 sensor; comprobar la conservación del valor comunicado al servidor. | [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA] |
+| RNF3 | Tiempo de respuesta extremo a extremo | Reflejar cada cambio de rango ensayado en el estado visible del actuador en un tiempo máximo de 1 s desde el cambio físico de distancia. | PN-03: registrar el cambio físico y la actuación con una grabación o instrumento de tiempo común; calcular la diferencia temporal por ensayo y el máximo observado, indicando resolución y transiciones evaluadas. | Recorrido completo sensor → servidor → actuador, incluidos adquisición, red, procesamiento y ejecución del comando. | [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA] |
+| RNF4 | Frecuencia de muestreo | Obtener al menos 2 lecturas/s durante la operación registrada del sensor. | PN-04: contar lecturas obtenidas durante una ventana de duración conocida y calcular cantidad/duración; contabilizar por separado lecturas inválidas y `POST` recibidos en el servidor para contrastar adquisición y recepción. | Planificación de adquisición en ESP32 sensor; recepción en servidor como comprobación del envío. | [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA] |
+| RNF5 | Calidad del código | Presentar módulos con responsabilidades delimitadas, clases que encapsulen estado y operaciones, interfaces documentadas, nombres y convenciones de C++ consistentes, y reglas de control separadas del hardware y los sockets. | Revisión de §3.4 sobre una versión identificada del código final: inspeccionar módulos, clases, interfaces y dependencias; registrar por criterio el cumplimiento, el archivo o fragmento que lo respalda y los ajustes pendientes. | Código de ambos ESP32, servidor y módulos compartidos de dominio y protocolo. | [PENDIENTE DE IMPLEMENTACIÓN] / [PENDIENTE DE EVIDENCIA] |
+
+Para RNF2, la aceptación se basará en el **máximo de los errores absolutos individuales**, no únicamente en el promedio; este último podría ocultar lecturas que excedan la tolerancia. Las lecturas inválidas se registrarán por separado y no se usarán como errores numéricos. La conclusión experimental deberá indicar las posiciones realmente ensayadas y sus condiciones, sin generalizar a distancias no probadas.
+
+Para RNF3, el origen temporal será el cambio físico de distancia y el final el cambio visible correspondiente del LED. Así se incluirá la espera hasta la siguiente adquisición y todo el recorrido de comunicación y control. No se restarán directamente timestamps de relojes de equipos distintos sin una referencia temporal común. El análisis de temporización del diseño podrá apoyar la explicación, pero no sustituirá la medición extremo a extremo exigida por la consigna.
+
+La revisión de RNF5 deberá comprobar, en particular, que el sensor adquiere y comunica, el servidor clasifica y produce comandos, y el actuador ejecuta los estados recibidos. También verificará la encapsulación de pines y conexiones, la coherencia entre declaraciones y uso de interfaces, constantes con nombres descriptivos y comentarios que expliquen unidades, temporización y tratamiento de errores. El registro de revisión permitirá justificar cada criterio mediante enlaces al código y distinguir los hallazgos de los ajustes efectivamente realizados.
+
+Los **valores objetivo** son los límites de aceptación de la tabla. Los **parámetros de configuración previstos** incluyen el intervalo de adquisición y envío de 250 ms, el timeout de ECHO de 30000 µs y los plazos de registro, ausencia de datos y reintento de 2000 ms. El intervalo nominal de 250 ms equivale teóricamente a 4 lecturas/s, pero no demuestra la frecuencia obtenida ni el tiempo de respuesta del sistema completo. Los **resultados medidos** se incorporarán en §4 y §5, con su versión de software y evidencias; en esta iteración permanecen pendientes. La revisión de implementación también permanece pendiente y los resultados de la Práctica 1 no acreditan estos requisitos de la Práctica 2.
 
 ## 2. Análisis y Diseño
 
-### 2.1 Análisis del problema
+Los diagramas enlazados en esta sección representan la propuesta de la Práctica 2. Su correspondencia con el montaje y el software finales deberá revisarse tras la implementación.
 
-El sistema recibe una magnitud física —la distancia— y debe transformarla en una indicación visual fácil de interpretar. Para ello se distinguen cuatro etapas:
+### 2.1 Arquitectura distribuida del sistema
 
-1. Generar el pulso de disparo del HC-SR04.
-2. medir la duración del pulso ECHO y convertirla a centímetros;
-3. clasificar la distancia o identificar una lectura inválida;
-4. aplicar y actualizar el patrón visual correspondiente sin bloquear nuevas mediciones.
+La arquitectura propuesta separa la adquisición de distancia, el procesamiento de las lecturas y la actuación física en tres equipos. Esta distribución responde al sistema exigido por la consigna y permite delimitar las responsabilidades de RF1–RF4: el objeto sensor obtiene los datos, la PC toma la decisión de control y el objeto actuador ejecuta sus órdenes. A diferencia del montaje de la Práctica 1, el sensor y los LEDs se ubican en ESP32 independientes y la clasificación deja de realizarse en el objeto que adquiere la distancia.
 
-La separación entre medición y actuación evita mezclar responsabilidades. Además, el uso de tiempo transcurrido con `millis()` permite que el parpadeo avance mientras el programa continúa ejecutando el ciclo principal.
+El ESP32 sensor deberá controlar el HC-SR04, convertir la duración del eco en centímetros y comunicar una lectura válida o su invalidez. La PC actuará como servidor TCP y entidad central de control: recibirá las lecturas, aplicará los rangos de §1.2 y generará los estados de los tres LEDs. El ESP32 actuador deberá recibir esos estados y mantener las salidas y el parpadeo correspondientes, sin clasificar distancias localmente. El diseño prevé firmware en C++ con Arduino y PlatformIO, y un servidor en C++ para Windows mediante sockets Winsock.
 
-### 2.2 Diagrama de arquitectura del sistema
+El siguiente diagrama reproduce el [despliegue propuesto por el equipo](docs/diagramas/Diseno_del_sistema.md#11-diagrama-de-despliegue). **Todas las direcciones IP son ilustrativas y el puerto TCP `5000` es un parámetro previsto**, pendiente de contrastar con la implementación y la red del montaje.
 
 ```mermaid
 flowchart LR
-    M[main.cpp] -->|Solicita la medición| S[SensorUltrasonico]
-    S -->|TRIG por GPIO5| H[HC-SR04]
-    H <-->|Onda ultrasónica| O[Objeto]
-    H -->|ECHO mediante divisor y GPIO18| S
-    S -->|Distancia o lectura inválida| M
-    M -->|Distancia| C[ControladorLeds]
-    C --> V[LED verde]
-    C --> A[LED amarillo]
-    C --> R[LED rojo]
-    M -->|Tiempo, distancia y rango| T[Monitor Serial]
+    subgraph SENSOR["Objeto inteligente 1 — Sensor"]
+        HC["HC-SR04"]
+        ESP_S["ESP32 / ESP-WROOM-32<br/>Cliente TCP: sensor<br/>192.168.0.101<br/>Envía REGISTER y POST"]
+        ESP_S -->|TRIG: GPIO5| HC
+        HC -->|ECHO: divisor y GPIO18| ESP_S
+    end
+
+    ROUTER["Router WiFi<br/>IEEE 802.11<br/>192.168.0.1"]
+    PC["Servidor TCP — PC Windows<br/>C++ / sockets Winsock<br/>192.168.0.102:5000<br/>Clasifica distancias y envía SET"]
+
+    subgraph ACTUADOR["Objeto inteligente 2 — Actuador"]
+        ESP_A["ESP32 / ESP-WROOM-32<br/>Cliente TCP: actuator<br/>192.168.0.100<br/>Envía REGISTER y recibe SET"]
+        LR["LED rojo<br/>GPIO27"]
+        LA["LED amarillo<br/>GPIO26"]
+        LV["LED verde<br/>GPIO25"]
+        ESP_A --> LR
+        ESP_A --> LA
+        ESP_A --> LV
+    end
+
+    ESP_S <-.->|WiFi| ROUTER
+    ESP_A <-.->|WiFi| ROUTER
+    ROUTER <-.->|WiFi| PC
+
+    classDef sensor fill:#e8f1fb,stroke:#245b8a,color:#17202a;
+    classDef equipo fill:#f5f7fa,stroke:#263238,color:#17202a;
+    classDef rojo fill:#ffebee,stroke:#c62828,color:#17202a;
+    classDef amarillo fill:#fff8e1,stroke:#c9a000,color:#17202a;
+    classDef verde fill:#e8f5e9,stroke:#2e7d32,color:#17202a;
+    class HC,ESP_S sensor;
+    class ROUTER,PC,ESP_A equipo;
+    class LR rojo;
+    class LA amarillo;
+    class LV verde;
 ```
 
-### 2.3 Diseño del circuito
+Las líneas discontinuas representan enlaces WiFi bidireccionales a través del router, que proporciona conectividad IP entre los equipos de la red local. El router transportará el tráfico y no participará en la clasificación ni en la generación de comandos. Los enlaces físicos de red deben distinguirse del flujo de aplicación: las lecturas viajarán del sensor al servidor y las órdenes del servidor al actuador.
 
-#### 2.3.1 Conexiones
+En el modelo cliente-servidor previsto, **ambos ESP32 iniciarán su propia conexión TCP persistente hacia la PC**. El servidor escuchará y aceptará las conexiones; utilizará cada socket para responder al registro y el socket del actuador para enviar órdenes. Por tanto, recibir comandos no convierte al ESP32 actuador en servidor ni exige que la PC abra una conexión nueva hacia él. El registro `REGISTER` identificará el rol de cada cliente, de modo que las direcciones de los ESP32 podrán obtenerse por DHCP según la configuración del montaje.
 
-| Elemento | Conexión |
-|---|---|
-| HC-SR04 VCC | VIN / 5 V del ESP32 |
-| HC-SR04 GND | GND común |
-| HC-SR04 TRIG | GPIO5 |
-| HC-SR04 ECHO | Divisor de voltaje y luego GPIO18 |
-| LED verde | GPIO25 → LED verde → resistencia de 220 Ω → GND |
-| LED amarillo | GPIO26 → LED amarillo → resistencia de 220 Ω → GND |
-| LED rojo | GPIO27 → LED rojo → resistencia de 220 Ω → GND |
+| Componente previsto | Responsabilidad | Intercambio principal |
+|---|---|---|
+| ESP32 sensor y HC-SR04 | Adquirir distancia con intervalo nominal de 250 ms y comunicar lecturas válidas o inválidas. | Enviar `REGISTER type=sensor` y `POST`; recibir la respuesta de registro. |
+| PC / servidor TCP | Registrar clientes, clasificar lecturas, generar comandos y vigilar la ausencia de datos. | Recibir `REGISTER` y `POST`; enviar `OK`, `ERROR` y `SET`. |
+| ESP32 actuador y tres LEDs | Recibir órdenes y mantener los modos de los LEDs mediante la temporización local. | Enviar `REGISTER type=actuator`; recibir la respuesta de registro y `SET`. |
+| Router WiFi | Proporcionar conectividad IP entre los tres equipos. | Transportar el tráfico de las dos conexiones TCP sobre IEEE 802.11. |
 
-#### 2.3.2 Divisor de voltaje de ECHO
+La comunicación se organiza en las cuatro capas del modelo TCP/IP utilizado en la práctica:
 
-El divisor utiliza 2.2 kΩ entre ECHO y el nodo de lectura, y 4.4 kΩ —dos resistencias de 2.2 kΩ en serie— entre el nodo y GND. Su tensión ideal se calcula como:
+| Capa | Elemento previsto | Función en el sistema |
+|---|---|---|
+| Aplicación | Protocolo de texto del grupo, descrito en §2.6. | Definir los mensajes de registro, lectura, actuación y error, así como su delimitación. |
+| Transporte | TCP y sockets; puerto del servidor previsto: `5000`. | Mantener las conexiones de los clientes y transportar el flujo ordenado de bytes. |
+| Internet | IPv4 en la red local. | Identificar los equipos mediante direcciones IP. |
+| Acceso a la red | WiFi, IEEE 802.11. | Proporcionar el enlace de los equipos con el router. |
+
+La implementación de los clientes y del servidor, incluida la configuración del puerto, permanece `[PENDIENTE DE IMPLEMENTACIÓN]`. La identificación de la red, las IP reales y la comprobación del recorrido completo permanecen `[PENDIENTE DE EVIDENCIA]`.
+
+### 2.2 Circuito del objeto sensor
+
+El objeto sensor diseñado comprende un ESP32 / ESP-WROOM-32, un HC-SR04 y tres resistencias de 2.2 kΩ que forman el divisor resistivo de ECHO. El ESP32 se alimentará por USB de 5 V y suministrará la alimentación del sensor desde VIN / 5 V. El siguiente esquema corresponde exclusivamente al objeto de adquisición de la Práctica 2:
+
+![Circuito propuesto del objeto sensor](docs/diagramas/circuito-sensor.svg)
+
+Las conexiones conservan la asignación del [diseño del objeto sensor](docs/diagramas/Diseno_del_sistema.md#31-objeto-inteligente-con-sensor):
+
+| Elemento o señal | Conexión prevista | Función |
+|---|---|---|
+| Alimentación del ESP32 | USB de 5 V. | Alimentar la placa del objeto sensor. |
+| HC-SR04 VCC | VIN / 5 V del ESP32. | Alimentar el sensor ultrasónico. |
+| HC-SR04 GND | GND del ESP32. | Establecer una referencia eléctrica común para alimentación y señales. |
+| HC-SR04 TRIG | GPIO5 del ESP32. | Recibir el pulso de disparo generado por el microcontrolador. |
+| HC-SR04 ECHO | ECHO → R1 de 2.2 kΩ → nodo conectado a GPIO18. | Conducir el pulso de eco hacia la entrada mediante el divisor. |
+| Retorno del divisor | Nodo GPIO18 → R2 de 2.2 kΩ → R3 de 2.2 kΩ → GND. | Formar la rama inferior de 4.4 kΩ del divisor. |
+
+El pulso enviado por GPIO5 a TRIG iniciará la medición. El ESP32 medirá en GPIO18 la duración de ECHO para obtener la distancia. El diseño conserva un pulso TRIG de 10 µs y un timeout de ECHO de 30000 µs; estos valores son parámetros previstos, cuya aplicación deberá comprobarse al revisar el firmware. La detección de una lectura inválida seguirá el comportamiento definido en §1.2.
+
+El divisor es necesario porque ECHO utiliza una señal de 5 V, superior al nivel lógico de 3.3 V del ESP32. El diseño evita conectar ECHO directamente a GPIO18: R1 se sitúa entre ECHO y el nodo de lectura, mientras R2 y R3 están en serie entre ese nodo y GND. La tensión ideal en el nodo se obtiene mediante:
 
 ```text
-VGPIO18 = VECHO × 4.4 kΩ / (2.2 kΩ + 4.4 kΩ)
-VGPIO18 = 5 V × 4.4 / 6.6 ≈ 3.33 V
+Rsuperior = R1 = 2.2 kΩ
+Rinferior = R2 + R3 = 2.2 kΩ + 2.2 kΩ = 4.4 kΩ
+VGPIO18 = VECHO × Rinferior / (Rsuperior + Rinferior)
+VGPIO18 = 5 V × 4.4 kΩ / (2.2 kΩ + 4.4 kΩ)
+VGPIO18 ≈ 3.33 V
 ```
 
-Esta reducción adapta idealmente la señal de 5 V de ECHO al nivel lógico del ESP32.
+Este resultado es un cálculo ideal con los valores nominales del diseño, no una tensión medida ni una validación eléctrica del montaje. La tierra común une el ESP32, el HC-SR04 y el retorno del divisor dentro de este objeto. El segundo ESP32 tendrá su propio circuito de actuación; la comunicación prevista entre ambos objetos se realizará por WiFi.
 
-```mermaid
-flowchart LR
-    V5[VIN / 5 V] --> VCC[VCC del HC-SR04]
-    GND[GND común] --- GNDHC[GND del HC-SR04]
-    G5[GPIO5] --> TRIG[TRIG del HC-SR04]
-    ECHO[ECHO del HC-SR04] --> R1[2.2 kΩ]
-    R1 --> N[Nodo de lectura]
-    N --> G18[GPIO18]
-    N --> R2[2.2 kΩ]
-    R2 --> R3[2.2 kΩ]
-    R3 --> GND
-    G25[GPIO25] --> LV[LED verde] --> RV[220 Ω] --> GND
-    G26[GPIO26] --> LA[LED amarillo] --> RA[220 Ω] --> GND
-    G27[GPIO27] --> LR[LED rojo] --> RR[220 Ω] --> GND
-```
+**Aplicación de los parámetros de adquisición en el firmware:** [PENDIENTE DE IMPLEMENTACIÓN]
 
-El esquema vectorial detallado puede consultarse en [`docs/diagramas/circuito.svg`](docs/diagramas/circuito.svg).
+**Montaje final, lista de componentes y correspondencia con el esquema:** [PENDIENTE DE EVIDENCIA]
 
-### 2.4 Diseño estructural del software
+**Comprobación de la alimentación y tensión real del nodo ECHO:** [PENDIENTE DE MEDICIÓN]
+
+### 2.3 Circuito del objeto actuador
+
+El objeto actuador diseñado comprende un segundo ESP32 / ESP-WROOM-32, tres LEDs —rojo, amarillo y verde— y tres resistencias de 220 Ω, una por LED. La placa se alimentará mediante USB de 5 V. Los LEDs serán controlados por señales GPIO de 3.3 V, según el esquema; la alimentación USB no equivale a aplicar 5 V a estas salidas.
+
+![Circuito propuesto del objeto actuador](docs/diagramas/circuito-actuador.svg)
+
+Las tres ramas conservan la polaridad y las conexiones del [diseño del objeto actuador](docs/diagramas/Diseno_del_sistema.md#32-objeto-inteligente-con-actuadores):
+
+| Elemento | Conexión prevista |
+|---|---|
+| Alimentación del ESP32 | USB de 5 V. |
+| LED verde | GPIO25 → ánodo del LED → cátodo → resistencia RV de 220 Ω → GND. |
+| LED amarillo | GPIO26 → ánodo del LED → cátodo → resistencia RA de 220 Ω → GND. |
+| LED rojo | GPIO27 → ánodo del LED → cátodo → resistencia RR de 220 Ω → GND. |
+| Retorno común | Las tres resistencias retornan al GND de este ESP32. |
+
+Cada resistencia se conecta en serie con su LED para limitar la corriente de su rama. El retorno compartido proporciona la referencia eléctrica común del objeto actuador. Con esta polaridad, un nivel alto en el GPIO encenderá el LED y un nivel bajo lo apagará; la alternancia temporizada producirá el parpadeo. El esquema no incluye el HC-SR04, que pertenece al objeto sensor independiente.
+
+La PC deberá generar el comando `SET` con los estados de los tres LEDs después de clasificar la lectura. El ESP32 actuador deberá interpretar el comando completo y entregarlo al controlador de salidas, que mantendrá los modos recibidos y actualizará el parpadeo mediante `millis()`. Esta separación distingue la decisión de control, ejecutada en el servidor, de la ejecución física y su temporización, realizadas en el actuador. Los rangos y frecuencias se mantienen definidos en §1.2; el circuito aporta las salidas necesarias para representarlos.
+
+**Recepción de comandos y control de salidas conforme al diseño:** [PENDIENTE DE IMPLEMENTACIÓN]
+
+**Montaje final, lista de componentes y correspondencia con el esquema:** [PENDIENTE DE EVIDENCIA]
+
+### 2.4 Diagrama de clases
+
+La estructura propuesta separa la medición, la comunicación, las reglas de control y la ejecución de los estados de los LEDs. El siguiente [diagrama de clases del diseño](docs/diagramas/Diseno_del_sistema.md#4-diagrama-de-clases-propuesto) conserva sus nombres, atributos, métodos y relaciones. Representa las interfaces principales previstas para la Práctica 2; no constituye una descripción de código final implementado.
 
 ```mermaid
 classDiagram
+    direction TB
+
     class SensorUltrasonico {
         -uint8_t pinDisparo_
         -uint8_t pinEco_
@@ -139,367 +230,429 @@ classDiagram
         +medirDistanciaCm() float
     }
 
-    class RangoDistancia {
-        <<enumeración>>
-        Invalido
-        Rojo
-        Amarillo
-        Verde
-        Lejos
-    }
-
     class ControladorLeds {
         -uint8_t pinVerde_
         -uint8_t pinAmarillo_
         -uint8_t pinRojo_
-        -RangoDistancia rangoActual_
-        -bool ledsEncendidos_
-        -bool cambioPendiente_
-        -unsigned long ultimoCambioMs_
+        -ComandoLeds comandoActual_
         +iniciar()
-        +establecerDistancia(float distanciaCm)
+        +establecerEstados(ComandoLeds comando)
         +actualizar(unsigned long tiempoActual)
-        +obtenerRangoActual() RangoDistancia
-        -clasificarDistancia(float distanciaCm) RangoDistancia
-        -aplicarEstadoLeds()
-        -apagarTodos()
+        +apagarTodos()
     }
 
-    SensorUltrasonico <-- ProgramaPrincipal : utiliza
-    ControladorLeds <-- ProgramaPrincipal : utiliza
-    RangoDistancia <-- ControladorLeds : clasifica con
+    class EstadoLed {
+        <<enumeration>>
+        Apagado
+        Encendido
+        Parpadeo2Hz
+        Parpadeo4Hz
+    }
+
+    class ComandoLeds {
+        <<struct>>
+        +EstadoLed rojo
+        +EstadoLed amarillo
+        +EstadoLed verde
+    }
+
+    class ControlDistancia {
+        +calcularComando(float distanciaCm) ComandoLeds
+    }
+
+    class TipoCliente {
+        <<enumeration>>
+        Sensor
+        Actuador
+    }
+
+    class ProtocoloAplicacion {
+        +crearRegistro(TipoCliente tipo, char* salida)
+        +crearLectura(float distanciaCm, char* salida)
+        +crearComando(ComandoLeds comando, char* salida)
+        +leerRegistro(const char* linea, TipoCliente& tipo) bool
+        +leerLectura(const char* linea, float& distanciaCm) bool
+        +leerComando(const char* linea, ComandoLeds& comando) bool
+    }
+
+    class ClienteTcp {
+        -TipoCliente tipo_
+        -bool registrado_
+        +iniciar()
+        +actualizar(unsigned long tiempoActual)
+        +estaRegistrado() bool
+        +enviar(const char* mensaje) bool
+        +recibir(char* linea) bool
+    }
+
+    class ServidorTcp {
+        -bool sensorRegistrado_
+        -bool actuadorRegistrado_
+        +iniciar(uint16_t puerto) bool
+        +actualizar(unsigned long tiempoActual)
+    }
+
+    ComandoLeds --> EstadoLed : contiene tres estados
+    ControlDistancia ..> ComandoLeds : produce
+    ControladorLeds o-- ComandoLeds : conserva el estado actual
+    ProtocoloAplicacion ..> ComandoLeds : codifica e interpreta
+    ProtocoloAplicacion ..> TipoCliente : interpreta el registro
+    ClienteTcp --> ProtocoloAplicacion : registro y respuestas
+    ClienteTcp --> TipoCliente : identifica su función
+    ServidorTcp --> ProtocoloAplicacion : interpreta y responde
+    ServidorTcp --> ControlDistancia : calcula la actuación
+
+    note for SensorUltrasonico "Hardware del ESP32 sensor"
+    note for ControladorLeds "Hardware del ESP32 actuador"
+    note for ClienteTcp "Una instancia por ESP32"
+    note for ControlDistancia "Reglas ejecutadas en la PC"
 ```
 
-`SensorUltrasonico` encapsula el acceso al dispositivo de entrada. `ControladorLeds` encapsula la clasificación, el estado del parpadeo y el acceso a los actuadores. `main.cpp` crea ambos objetos y coordina el intercambio de información.
+Las clases y los tipos se distribuyen de acuerdo con la arquitectura de §2.1:
 
-### 2.5 Diseño de comportamiento
+| Clase o tipo propuesto | Responsabilidad | Equipo o ámbito previsto |
+|---|---|---|
+| `SensorUltrasonico` | Inicializar los pines del HC-SR04 y obtener la distancia mediante `medirDistanciaCm()`. | ESP32 sensor. |
+| `ControladorLeds` | Recibir `ComandoLeds` mediante `establecerEstados()`, actualizar las salidas y el parpadeo, y permitir el apagado de los tres LEDs. | ESP32 actuador. |
+| `ClienteTcp` | Mantener la conexión y el registro del rol, enviar mensajes y recibir líneas completas. | Una instancia en cada ESP32, con su propio rol. |
+| `ServidorTcp` | Aceptar y gestionar las conexiones de ambos roles, interpretar mensajes y coordinar el control central. | PC Windows. |
+| `ControlDistancia` | Clasificar una distancia y producir `ComandoLeds` mediante `calcularComando()`. | PC Windows. |
+| `ProtocoloAplicacion` | Construir e interpretar registros, lecturas y comandos de actuación. | Elemento conceptualmente compartido por clientes y servidor, según el intercambio que realiza cada equipo. |
+| `EstadoLed` y `ComandoLeds` | Representar los modos de un LED y reunir los estados rojo, amarillo y verde en un comando. | Dominio conceptualmente compartido, independiente de GPIO y sockets. |
+| `TipoCliente` | Identificar los roles `Sensor` y `Actuador` en el registro. | Tipo del protocolo conceptualmente compartido. |
+
+La dependencia de `ServidorTcp` respecto de `ControlDistancia` sitúa la clasificación en la PC. `ControlDistancia` produce un `ComandoLeds`, mientras `ProtocoloAplicacion` traduce esa representación a mensajes de texto o interpreta mensajes recibidos. Así, las reglas de control y los tipos del dominio pueden expresarse en C++ sin depender de Arduino o Winsock; las clases de hardware y red concentran esas dependencias.
+
+`ComandoLeds` contiene tres valores de `EstadoLed`, no tres controladores de hardware. La relación con `ControladorLeds`, rotulada como conservación del estado actual, representa el comando que este deberá mantener en `comandoActual_`. No se deduce de esa relación una necesidad de asignación dinámica. Las asociaciones de `ClienteTcp` con `TipoCliente` y `ProtocoloAplicacion` expresan, respectivamente, la identidad del cliente y el tratamiento de su registro y sus respuestas; las del servidor expresan la interpretación de mensajes y la generación de la actuación.
+
+Los programas principales de los ESP32 coordinarán los objetos locales, aunque no aparecen como clases en este diagrama. El programa sensor solicitará la medición y su envío; el programa actuador entregará los comandos recibidos al controlador. Esta coordinación explica por qué `SensorUltrasonico` no tiene una relación directa con `ClienteTcp` y por qué `ControladorLeds` no clasifica distancias. La entrada prevista de este último será `establecerEstados(ComandoLeds comando)`, en lugar de la clasificación local mediante `establecerDistancia()` descrita en la Práctica 1.
+
+Las firmas mantienen la separación entre datos y transporte: `calcularComando(float distanciaCm)` devolverá un `ComandoLeds`; `leerRegistro()`, `leerLectura()` y `leerComando()` devolverán un booleano e incorporarán los datos interpretados en sus parámetros de salida. Según el diseño, al interpretar `distance=invalid`, `leerLectura()` entregará `NAN`, que `ControlDistancia` convertirá en todos apagados. `ClienteTcp::enviar()` agregará LF (`\n`) al contenido y `recibir()` entregará una línea completa sin ese delimitador. `ProtocoloAplicacion` trabajará con el contenido; el buffer local previsto tiene 128 bytes, hasta 127 de contenido y el terminador C `\0`, que no se transmitirá.
+
+El diagrama es una vista resumida: no detalla todos los buffers y temporizadores necesarios para las secuencias de §2.5, ni las operaciones específicas para construir o interpretar `OK` y `ERROR`. También omite los tipos de retorno de las operaciones `crearRegistro()`, `crearLectura()` y `crearComando()`. Estos aspectos deberán confirmarse en las interfaces finales; no se añaden firmas ni relaciones para resolverlos en esta iteración. La agregación de `ComandoLeds` se interpreta conforme al atributo declarado, sin afirmar una política de propiedad de memoria no documentada.
+
+**Justificación detallada y correspondencia con las interfaces finales:** [PENDIENTE DE IMPLEMENTACIÓN]
+
+### 2.5 Diagramas de secuencia
+
+Las siguientes secuencias describen el comportamiento previsto entre los equipos de §2.1. Los participantes representan objetos físicos completos; las llamadas internas al servidor y al actuador se relacionan con las responsabilidades de §2.4. Los ejemplos son intercambios propuestos, no registros de una ejecución real. Cada mensaje de aplicación deberá terminar en LF (`\n`), aunque el delimitador se omite en las etiquetas para facilitar la lectura. El puerto `5000` continúa siendo un parámetro previsto.
+
+#### 2.5.1 Registro y funcionamiento normal
+
+El escenario reproduce la [secuencia de registro y funcionamiento normal](docs/diagramas/Diseno_del_sistema.md#51-registro-y-funcionamiento-normal) del diseño:
 
 ```mermaid
 sequenceDiagram
-    participant P as main.cpp
-    participant S as SensorUltrasonico
-    participant C as ControladorLeds
-    participant L as LEDs
-    participant M as Monitor Serial
+    participant S as ESP32 sensor
+    participant A as ESP32 actuador
+    participant PC as Servidor TCP (PC)
 
-    loop Ciclo principal
-        P->>C: actualizar(millis())
-        alt Han transcurrido 250 ms
-            P->>S: medirDistanciaCm()
-            S-->>P: distancia o NAN
-            P->>C: establecerDistancia(distancia)
-            P->>C: actualizar(millis())
-            C->>L: aplicar rango o apagar
-            P->>M: mostrar tiempo, distancia y rango
+    Note over S,PC: Ambos clientes se asocian al WiFi y abren su conexión TCP a la PC:5000
+    S->>PC: REGISTER type=sensor
+    PC-->>S: OK
+    A->>PC: REGISTER type=actuator
+    PC-->>A: OK
+    PC->>A: SET redLed=off yellowLed=off greenLed=off
+    Note over S,PC: Los registros también pueden llegar en el orden inverso
+
+    Note over S,PC: Ejemplos sucesivos: un POST cada 250 ms
+    S->>PC: POST distance=45.00
+    PC->>PC: calcularComando(45.00): rango rojo
+    PC->>A: SET redLed=blink_4 yellowLed=off greenLed=off
+    A->>A: Alternar el rojo cada 125 ms
+
+    S->>PC: POST distance=75.00
+    PC->>PC: calcularComando(75.00): rango amarillo
+    PC->>A: SET redLed=off yellowLed=blink_2 greenLed=off
+    A->>A: Alternar el amarillo cada 250 ms
+
+    S->>PC: POST distance=120.00
+    PC->>PC: calcularComando(120.00): rango verde
+    PC->>A: SET redLed=off yellowLed=off greenLed=on
+    A->>A: Mantener el verde encendido
+
+    S->>PC: POST distance=invalid
+    PC->>PC: calcularComando(NAN): todos apagados
+    PC->>A: SET redLed=off yellowLed=off greenLed=off
+    A->>A: Apagar los tres LEDs
+```
+
+Antes del registro, ambos ESP32 deberán asociarse a la red WiFi y establecer sus conexiones TCP hacia la PC. Cada cliente enviará `REGISTER` como primer mensaje de aplicación: `REGISTER type=sensor` para el objeto de adquisición y `REGISTER type=actuator` para el de actuación. El servidor reservará cada rol en un socket distinto y responderá `OK`; el cliente deberá esperar esa confirmación antes de iniciar el intercambio operativo. `OK` confirma exclusivamente el registro, no cada lectura ni cada actuación.
+
+El orden de registro podrá invertirse. En el ejemplo, el actuador se registra sin una lectura disponible y recibe `SET redLed=off yellowLed=off greenLed=off`. Si el sensor ya hubiera enviado una lectura, el servidor deberá aplicar el estado correspondiente cuando esa lectura sea válida y tenga menos de 2000 ms; si es inválida, antigua o inexistente, deberá ordenar el apagado. Mientras no exista un actuador registrado, el servidor conservará únicamente la última lectura y su tiempo de recepción.
+
+Una vez registrado, el sensor deberá enviar un `POST` con intervalo nominal de 250 ms. Para los ejemplos de 45.00, 75.00 y 120.00 cm, el servidor interpretará la lectura mediante `ProtocoloAplicacion`, calculará el comando mediante `ControlDistancia` y enviará, respectivamente, los estados rojo `blink_4`, amarillo `blink_2` o verde `on`, con los otros LEDs en `off`. El mensaje `POST distance=invalid` deberá producir un `SET` con los tres LEDs apagados. Estos ejemplos concretan el flujo de mensajes sin acreditar lecturas físicas ni tiempos medidos.
+
+Cada `POST` completo y válido, incluido el token `invalid`, deberá producir un `SET` si el actuador está registrado. El servidor enviará el comando incluso si coincide con el anterior. El ESP32 actuador deberá validar e interpretar el mensaje completo, entregar los tres estados a `ControladorLeds` y controlar localmente la temporización del parpadeo mediante `actualizar()`. La PC decidirá el modo, pero no enviará una orden por cada alternancia del GPIO. Los comandos idénticos deberán conservar la fase del modo vigente y el actuador no enviará una confirmación por cada lectura, conforme al protocolo diseñado.
+
+#### 2.5.2 Ausencia de datos, desconexión y recuperación
+
+El segundo escenario reproduce la [secuencia de ausencia de datos y recuperación](docs/diagramas/Diseno_del_sistema.md#52-ausencia-de-datos-y-recuperación). Sus ramas describen situaciones alternativas después del registro; la rama del sensor presupone que existe un actuador registrado.
+
+```mermaid
+sequenceDiagram
+    participant S as ESP32 sensor
+    participant A as ESP32 actuador
+    participant PC as Servidor TCP (PC)
+
+    Note over S,PC: Situaciones alternativas después del registro
+    alt El servidor acumula 2000 ms sin un POST del sensor
+        PC->>PC: Invalidar la última lectura y liberar el rol sensor
+        PC->>A: SET redLed=off yellowLed=off greenLed=off
+        PC--xS: Cerrar la conexión del sensor
+        A->>A: Apagar los tres LEDs
+        Note over S: Reintentar WiFi/TCP cada 2000 ms
+        S->>PC: Abrir nueva conexión TCP
+        S->>PC: REGISTER type=sensor
+        PC-->>S: OK
+        S->>PC: POST distance=120.00
+        PC->>A: SET redLed=off yellowLed=off greenLed=on
+    else El actuador detecta desconexión o acumula 2000 ms sin SET
+        A->>A: Apagar los tres LEDs
+        opt La conexión TCP se cerró
+            Note over A: Reintentar WiFi/TCP cada 2000 ms
+            A->>PC: Abrir nueva conexión TCP
+            A->>PC: REGISTER type=actuator
+            PC-->>A: OK
+            alt Última lectura válida de menos de 2000 ms
+                PC->>A: SET con el estado calculado de esa lectura
+            else Lectura inválida, antigua o inexistente
+                PC->>A: SET redLed=off yellowLed=off greenLed=off
+            end
         end
     end
 ```
 
-El controlador alterna el estado encendido/apagado cuando han transcurrido aproximadamente 150 ms. Si cambia el rango, apaga el estado anterior y aplica de inmediato el nuevo patrón en la siguiente actualización. Si el rango es inválido, fuerza los tres LEDs a nivel bajo.
+**Ausencia de lecturas del sensor.** El servidor deberá contar 2000 ms desde la recepción del último `POST` completo y válido; `POST distance=invalid` también reiniciará ese plazo porque comunica el estado del sensor. Si todavía no hubiera recibido una lectura después del registro, el tiempo se contará desde su aceptación. Al vencer el plazo, la PC invalidará la lectura almacenada, enviará todos apagados al actuador registrado y cerrará la conexión del sensor, liberando su rol. El ESP32 sensor, al detectar la desconexión, deberá reintentar la conexión WiFi/TCP cada 2000 ms y registrarse de nuevo.
 
-### 2.6 Matriz de trazabilidad
+**Ausencia de comandos en el actuador.** El ESP32 actuador deberá medir 2000 ms desde el último `SET` completo y válido, o desde la finalización del registro mientras espera el primero. Al vencer ese plazo, apagará localmente los tres LEDs. Si el socket sigue abierto, deberá mantener la conexión y permanecer apagado hasta recibir un `SET` válido; la ausencia de comandos por sí sola no implica abrir otro socket. Esta protección local permite apagar las salidas aun cuando la desconexión del servidor todavía no haya sido detectada.
 
-| Requisito | Diseño relacionado | Implementación | Validación / evidencia |
-| --------- | ------------------ | -------------- | ---------------------- |
-| RF1 | HC-SR04 y medición ultrasónica | `SensorUltrasonico` | Pruebas de exactitud y PDF de pruebas |
-| RF2 | Clasificación de rangos con límites de 5, 15 y 25 cm | `ControladorLeds` | Pruebas funcionales de 3, 5, 6, 10, 15, 16, 20, 25 y 30 cm |
-| RF3 | Actuación mediante LEDs | `ControladorLeds` | Pruebas funcionales y fotografías de los LEDs |
-| RF4 | Gestión de timeout y lectura inválida | `SensorUltrasonico`, `ControladorLeds` y `main.cpp` | Prueba complementaria de lectura inválida |
-| RNF1 | Operación continua del sistema | Firmware completo | 19 min 15.251 s sin reinicios ni bloqueos |
-| RNF2 | Medición ultrasónica y conversión del tiempo de eco | `SensorUltrasonico` | 45 lecturas entre 3 cm y 30 cm; error máximo absoluto global de 0.63 cm |
-| RNF3 | Medición cada 250 ms y timeout máximo de 30 ms | Temporización de `main.cpp` y `SensorUltrasonico` | Lógica, ≈280 ms más procesamiento breve |
-| RNF4 | Intervalo de medición de 250 ms | Temporización de `main.cpp` | Lógica, 4 lecturas/s nominales y ≈3.57 lecturas/s conservadoras |
-| RNF5 | POO, modularidad y separación de responsabilidades | `SensorUltrasonico`, `ControladorLeds` y `main.cpp` | Revisión de POO, modularidad, comentarios y responsabilidades |
+**Desconexión detectada.** Cuando el servidor detecte la desconexión del sensor, deberá invalidar inmediatamente sus datos, liberar el rol y ordenar el apagado al actuador registrado, sin esperar otros 2000 ms. Cuando el ESP32 actuador detecte la pérdida de su propia conexión, deberá apagar inmediatamente sus salidas. El envío desde la PC presupone que la conexión del actuador sigue disponible; si también se interrumpe, el apagado dependerá de la detección o del plazo local del actuador.
+
+**Reintento y nuevo registro.** Los ESP32 desconectados deberán reintentar WiFi/TCP cada 2000 ms, crear un socket nuevo y repetir `REGISTER` / `OK`. Los roles de conexiones cerradas deberán quedar liberados, y los fragmentos de mensajes, buffers y temporizadores de conexión se reiniciarán conforme al diseño. El registro tiene un plazo de 2000 ms: el servidor cerrará una conexión sin `REGISTER` completo dentro de ese tiempo, y el cliente cerrará y reintentará si no recibe `OK` dentro del plazo previsto. Estos tiempos se miden localmente, sin requerir relojes sincronizados entre equipos.
+
+**Restauración mediante un comando válido.** Tras el nuevo registro del sensor, una lectura como `POST distance=120.00` deberá producir el comando verde encendido que muestra el diagrama, si el actuador está registrado. Tras el nuevo registro del actuador, el servidor deberá enviar inmediatamente el comando correspondiente a la última lectura válida de menos de 2000 ms, o todos apagados si la lectura es inválida, antigua o inexistente. Un nuevo `SET` válido restablecerá los modos; después de un apagado por ausencia de datos, los parpadeos deberán comenzar desde encendido. Esta recuperación no supone reutilizar una lectura cuya vigencia haya vencido.
+
+Las secuencias son coherentes con la clasificación en `ControlDistancia`, el intercambio gestionado por las clases TCP y la ejecución local en `ControladorLeds`. Las actividades de supervisión y recuperación requieren detalles internos no mostrados en el diagrama de clases, que deberán contrastarse con las interfaces y el código finales. PV-06, PV-12 a PV-16 y sus evidencias permitirán verificar los escenarios de registro y recuperación; el flujo normal y la continuidad del parpadeo se relacionan con PV-01 a PV-05.
+
+**Correspondencia de las secuencias con los registros reales de intercambio:** [PENDIENTE DE EVIDENCIA]
+
+**Implementación de los mecanismos de registro, supervisión y recuperación:** [PENDIENTE DE IMPLEMENTACIÓN]
+
+### 2.6 Protocolo de aplicación TCP
+
+La [especificación propuesta](docs/diagramas/Diseno_del_sistema.md#6-especificación-del-protocolo-de-aplicación) define líneas ASCII delimitadas por LF (`\n`), con hasta 127 bytes de contenido y 128 bytes incluyendo LF. Prevé reconstruir mensajes fragmentados y separar mensajes agrupados en el flujo TCP.
+
+| Mensaje previsto | Dirección | Finalidad |
+|---|---|---|
+| `REGISTER type=<sensor o actuator>` | Cliente → servidor | Solicitar el registro del rol. |
+| `OK` | Servidor → cliente | Confirmar exclusivamente el registro. |
+| `POST distance=<decimal positivo o invalid>` | Sensor → servidor | Comunicar una lectura en cm o su invalidez. |
+| `SET redLed=<estado> yellowLed=<estado> greenLed=<estado>` | Servidor → actuador | Aplicar los tres modos: `off`, `on`, `blink_2` o `blink_4`. |
+| `ERROR reason=<motivo>` | Servidor → cliente | Rechazar un mensaje o registro y cerrar la conexión. |
+
+Los campos entre `< >` son marcadores descriptivos. El registro, la ausencia de datos y los reintentos contemplan plazos de 2000 ms según el diseño. La especificación completa conserva las reglas de sintaxis, orden, errores y recuperación.
+
+**Correspondencia con el protocolo implementado y ejemplos reales de intercambio:** [PENDIENTE DE IMPLEMENTACIÓN] / [PENDIENTE DE EVIDENCIA]
+
+### 2.7 Matriz de trazabilidad
+
+| Requisito | Diseño relacionado | Implementación prevista | Validación prevista | Evidencia |
+|---|---|---|---|---|
+| RF1 | Circuito sensor y protocolo `POST`. | `SensorUltrasonico`, programa sensor: [PENDIENTE DE IMPLEMENTACIÓN]. | PV-04 y PN-02. | [PENDIENTE DE EVIDENCIA] |
+| RF2 | Rangos de §1.2. | `ControlDistancia`: [PENDIENTE DE IMPLEMENTACIÓN]. | PV-01 a PV-03, incluidos límites. | [PENDIENTE DE EVIDENCIA] |
+| RF3 | Circuito actuador y comandos `SET`. | `ControladorLeds`: [PENDIENTE DE IMPLEMENTACIÓN]. | PV-01 a PV-05. | [PENDIENTE DE EVIDENCIA] |
+| RF4 | Arquitectura, secuencias y protocolo. | `ClienteTcp`, `ServidorTcp`, `ProtocoloAplicacion`: [PENDIENTE DE IMPLEMENTACIÓN]. | Flujo integrado y PV-06 a PV-16. | [PENDIENTE DE EVIDENCIA] |
+| RNF1 | Operación distribuida y recuperación. | Sistema completo: [PENDIENTE DE IMPLEMENTACIÓN]. | PN-01. | [PENDIENTE DE EVIDENCIA] |
+| RNF2 | Medición ultrasónica. | Módulo sensor: [PENDIENTE DE IMPLEMENTACIÓN]. | PN-02. | [PENDIENTE DE EVIDENCIA] |
+| RNF3 | Flujo sensor → servidor → actuador. | Sistema completo: [PENDIENTE DE IMPLEMENTACIÓN]. | PN-03. | [PENDIENTE DE EVIDENCIA] |
+| RNF4 | Medición y envío nominal cada 250 ms. | Programa sensor y recepción TCP: [PENDIENTE DE IMPLEMENTACIÓN]. | PN-04. | [PENDIENTE DE EVIDENCIA] |
+| RNF5 | Clases y separación de responsabilidades. | Módulos y tipos de §3.2: [PENDIENTE DE IMPLEMENTACIÓN]. | Revisión de §3.4. | [PENDIENTE DE EVIDENCIA] |
 
 ## 3. Desarrollo e Implementación
 
-### 3.1 Entorno de desarrollo
+Esta sección queda reservada para describir el desarrollo de la Práctica 2 con enlaces al código y a fragmentos clave, sin copiar archivos completos. Las clases del diseño no se presentan como implementadas.
 
-| Componente | Configuración |
-|---|---|
-| Plataforma de desarrollo | PlatformIO |
-| Plataforma embebida | `espressif32` |
-| Placa | `esp32doit-devkit-v1` |
-| Entorno de trabajo | Arduino |
-| Lenguaje | C++ |
-| Velocidad del monitor Serial | 115200 baudios |
-| Librerías externas añadidas | Ninguna |
+### 3.1 Entorno de desarrollo y configuración
 
-### 3.2 Organización del código
+| Elemento | Base prevista | Versión o configuración utilizada |
+|---|---|---|
+| Firmware de ambos ESP32 | C++ / Arduino / PlatformIO. | [PENDIENTE DE IMPLEMENTACIÓN] |
+| Servidor PC | C++ / Windows / Winsock. | [PENDIENTE DE IMPLEMENTACIÓN] |
+| Red y servicio | WiFi local / IPv4 / puerto propuesto 5000. | [PENDIENTE DE IMPLEMENTACIÓN] |
+| Compilación y ejecución | Documentar herramientas y pasos reproducibles. | [PENDIENTE DE IMPLEMENTACIÓN] |
 
-| Archivo | Responsabilidad |
-|---|---|
-| `include/SensorUltrasonico.h` | Declarar la clase del sensor y su interfaz pública. |
-| `src/SensorUltrasonico.cpp` | Inicializar TRIG/ECHO, generar el pulso, medir ECHO y convertirlo a centímetros. |
-| `include/ControladorLeds.h` | Declarar los rangos y la interfaz del controlador de LEDs. |
-| `src/ControladorLeds.cpp` | Clasificar la distancia y mantener el parpadeo no bloqueante. |
-| `src/main.cpp` | Configurar los pines mediante objetos, programar las mediciones y emitir la información Serial. |
+### 3.2 Implementación de módulos y clases
 
-### 3.3 Medición ultrasónica
+| Módulo previsto | Clases o tipos propuestos | Responsabilidad | Archivo y enlace al código P2 | Estado |
+|---|---|---|---|---|
+| Sensor | `SensorUltrasonico`, programa principal sensor. | Medir y coordinar envío de lecturas. | [PENDIENTE DE IMPLEMENTACIÓN] | Reutilización prevista; por verificar. |
+| Actuador | `ControladorLeds`, programa principal actuador. | Aplicar comandos y temporizar parpadeos. | [PENDIENTE DE IMPLEMENTACIÓN] | Adaptación prevista; por verificar. |
+| Cliente de red | `ClienteTcp`. | Conectar, registrar, enviar, recibir y reintentar. | [PENDIENTE DE IMPLEMENTACIÓN] | Desarrollo propuesto. |
+| Servidor de red | `ServidorTcp`. | Atender sockets, roles y ausencia de lecturas. | [PENDIENTE DE IMPLEMENTACIÓN] | Desarrollo propuesto. |
+| Control en PC | `ControlDistancia`. | Convertir distancias en estados de LEDs. | [PENDIENTE DE IMPLEMENTACIÓN] | Desarrollo propuesto. |
+| Dominio compartido | `EstadoLed`, `ComandoLeds`. | Representar la actuación. | [PENDIENTE DE IMPLEMENTACIÓN] | Tipos propuestos. |
+| Protocolo compartido | `ProtocoloAplicacion`, `TipoCliente`. | Codificar y validar mensajes y roles. | [PENDIENTE DE IMPLEMENTACIÓN] | Desarrollo propuesto. |
 
-La clase `SensorUltrasonico` recibe los pines de disparo y eco mediante su constructor. `iniciar()` configura TRIG como salida, ECHO como entrada y deja TRIG en nivel bajo.
+### 3.3 Fragmentos clave y decisiones técnicas
 
-Para cada medición, `medirDistanciaCm()` mantiene TRIG en bajo durante 2 µs, genera un pulso alto de 10 µs y mide ECHO con `pulseIn()`. El timeout se fijó en 30000 µs. Si no se detecta un pulso dentro de ese intervalo, el método devuelve `NAN`, lo que distingue claramente un error de una distancia válida.
+| Aspecto por documentar | Explicación y decisión final | Enlace al fragmento |
+|---|---|---|
+| Medición, periodicidad y lectura inválida. | [PENDIENTE DE IMPLEMENTACIÓN] | [PENDIENTE DE IMPLEMENTACIÓN] |
+| Registro, sockets y delimitación del flujo TCP. | [PENDIENTE DE IMPLEMENTACIÓN] | [PENDIENTE DE IMPLEMENTACIÓN] |
+| Clasificación en servidor y actuación no bloqueante. | [PENDIENTE DE IMPLEMENTACIÓN] | [PENDIENTE DE IMPLEMENTACIÓN] |
+| Errores, apagado y recuperación. | [PENDIENTE DE IMPLEMENTACIÓN] | [PENDIENTE DE IMPLEMENTACIÓN] |
 
-Cuando existe un pulso, la conversión utilizada es:
+### 3.4 Revisión de calidad del código
 
-```text
-distanciaCm = duraciónEcoUs × 0.0343 cm/µs ÷ 2
-```
-
-La división entre dos representa el recorrido de ida y vuelta del sonido.
-
-### 3.4 Clasificación y control de LEDs
-
-`ControladorLeds` recibe los tres pines mediante su constructor. La enumeración `RangoDistancia` representa los estados `Invalido`, `Rojo`, `Amarillo`, `Verde` y `Lejos`. El método privado `clasificarDistancia()` aplica los límites de 5, 15 y 25 cm.
-
-`establecerDistancia()` solo reinicia el patrón cuando cambia el rango. Esto evita alterar el parpadeo en cada nueva muestra. Ante un valor no finito o menor o igual que cero, selecciona `Invalido` y apaga todos los LEDs.
-
-### 3.5 Parpadeo no bloqueante
-
-El método `actualizar()` compara el tiempo recibido con `ultimoCambioMs_`. Cuando transcurren 150 ms, alterna `ledsEncendidos_` y aplica el estado correspondiente. No se utiliza `delay()` para el parpadeo, por lo que el ciclo principal puede continuar atendiendo la planificación de mediciones y la salida Serial. Los únicos retardos breves son los microsegundos necesarios para formar el pulso TRIG.
-
-### 3.6 Coordinación y salida Serial
-
-`main.cpp` crea un objeto `SensorUltrasonico` y un objeto `ControladorLeds` con los pines definidos como constantes. `setup()` inicia Serial y ambos objetos. En `loop()` se actualiza continuamente el controlador y se realiza una medición cuando han transcurrido 250 ms desde la anterior.
-
-Cada registro Serial sigue uno de estos formatos:
-
-```text
-Tiempo: <tiempo> ms | Distancia: <distancia> cm | Rango: <rango>
-Tiempo: <tiempo> ms | Lectura invalida | Rango: Invalido
-```
-
-El intervalo configurado corresponde nominalmente a cuatro lecturas por segundo. Las secciones 4.5 y 4.6 justifican lógicamente el tiempo de respuesta y la frecuencia de muestreo mediante un escenario conservador que también considera el timeout máximo de `pulseIn()`.
-
-### 3.7 Buenas prácticas aplicadas
-
-- Separación de responsabilidades mediante dos clases pequeñas.
-- Encapsulación de pines y estados internos.
-- Constantes con nombres descriptivos para pines, límites e intervalos.
-- Rangos representados mediante `enum class`.
-- Cálculos de tiempo compatibles con el desbordamiento de `millis()` mediante resta sin signo.
-- Ausencia de asignación dinámica, herencia, tareas adicionales y librerías innecesarias.
-- Tratamiento explícito del timeout y de las lecturas inválidas.
+| Criterio RNF5 | Hallazgos y ajustes | Evidencia de revisión |
+|---|---|---|
+| POO, modularidad, nombres, convenciones, comentarios y separación de hardware/red/control. | [PENDIENTE DE IMPLEMENTACIÓN] | [PENDIENTE DE EVIDENCIA] |
 
 ## 4. Pruebas y Validaciones
 
-Esta sección documenta las pruebas funcionales, de exactitud y de estabilidad realizadas. El tiempo de respuesta y la frecuencia de muestreo se validan lógicamente a partir del diseño del firmware y se mantienen identificadas como análisis teóricos, no como mediciones físicas.
+El plan toma como referencia las [validaciones previstas del diseño](docs/diagramas/Diseno_del_sistema.md#7-trazabilidad-y-validaciones-previstas). No se registra ninguna prueba como ejecutada o aprobada en esta iteración.
 
-### 4.1 Datos generales de la sesión de pruebas
+### 4.1 Datos de la sesión y procedimiento
 
-| Campo | Valor registrado |
+| Campo | Registro |
 |---|---|
-| Fecha y hora | 14/09/2026 |
-| Integrantes responsables | Grupo 8: Santiago Javier Torres Vacaflores y Ariel Adrian Mercado Alegre |
-| Versión o commit del firmware | `a2c95c3` |
-| Alimentación utilizada | ESP32 alimentado mediante USB desde la computadora |
-| Instrumento de referencia | Regla graduada en centímetros |
-| Condiciones y observaciones del ambiente | Pruebas realizadas en un ambiente interior, con el circuito sobre una superficie estable; las distancias se midieron desde la cara frontal de los transductores del HC-SR04 hasta la superficie del objeto de referencia. |
-| Primer timestamp registrado | 142752 ms |
-| Último timestamp registrado | 1298003 ms |
-| Duración calculada | 1155251 ms (19 min 15.251 s) |
+| Fecha, hora e integrantes responsables | [PENDIENTE DE EVIDENCIA] |
+| Versiones o commits de ambos firmwares y del servidor | [PENDIENTE DE IMPLEMENTACIÓN] |
+| Montaje, alimentación, red, IP y puerto reales | [PENDIENTE DE EVIDENCIA] |
+| Instrumento de referencia y condiciones ambientales | [PENDIENTE DE EVIDENCIA] |
+| Método, repeticiones y resolución temporal de las mediciones | [PENDIENTE DE MEDICIÓN] |
 
-### 4.2 Validación funcional de rangos y actuadores
+### 4.2 Casos de prueba funcionales
 
-Se probaron distancias dentro de los cuatro rangos, incluidos los límites exactos de 5, 15 y 25 cm. En todos los casos el rango observado y el comportamiento físico coincidieron con lo esperado.
+Para los límites exactos, distinguir pruebas con entradas controladas al servidor de pruebas físicas sujetas al error del sensor. Registrar el método empleado y verificar además el recorrido integrado sensor → servidor → actuador.
 
-| Caso | Distancia de referencia | Rango esperado | Distancia promedio observada | Rango observado | Comportamiento físico observado | Evaluación |
-|---|---:|---|---:|---|---|---|
-| PF-01 | Sin eco válido | `Invalido` | No aplicable | `Invalido` | Los tres LEDs permanecieron apagados | **APROBADA** |
-| PF-02 | 3 cm | `Rojo` | 3.310 cm | `Rojo` | Correcto | **APROBADA** |
-| PF-03 | 5 cm | `Rojo` | 4.944 cm | `Rojo` | Correcto | **APROBADA** |
-| PF-04 | 6 cm | `Amarillo` | 6.252 cm | `Amarillo` | Correcto | **APROBADA** |
-| PF-05 | 10 cm | `Amarillo` | 10.630 cm | `Amarillo` | Correcto | **APROBADA** |
-| PF-06 | 15 cm | `Amarillo` | 14.750 cm | `Amarillo` | Correcto | **APROBADA** |
-| PF-07 | 16 cm | `Verde` | 16.120 cm | `Verde` | Correcto | **APROBADA** |
-| PF-08 | 20 cm | `Verde` | 19.992 cm | `Verde` | Correcto | **APROBADA** |
-| PF-09 | 25 cm | `Verde` | 24.610 cm | `Verde` | Correcto | **APROBADA** |
-| PF-10 | 30 cm | `Lejos` | 29.812 cm | `Lejos` | Los tres LEDs parpadearon simultáneamente | **APROBADA** |
+| ID | Requisitos | Entrada o situación prevista | Resultado esperado según el diseño | Resultado y evaluación | Evidencia |
+|---|---|---|---|---|---|
+| PV-01 | RF2, RF3 | 45 y 49.99 cm. | Solo rojo a 4 Hz. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
+| PV-02 | RF2, RF3 | 50, 75 y 99.99 cm. | Solo amarillo a 2 Hz. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
+| PV-03 | RF2, RF3 | 100 y 120 cm. | Solo verde fijo. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
+| PV-04 | RF1, RF3, RF4 | Timeout de ECHO o lectura inválida. | `POST distance=invalid`; `SET` con todos apagados. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
+| PV-05 | RF3, RF4 | Comandos idénticos cada 250 ms. | Conservar fase; ciclos de 500 o 250 ms. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
+| PV-06 | RF4 | Registrar primero sensor y luego actuador; repetir en orden inverso. | Ambos órdenes funcionan; estado reciente o apagado inicial. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
+| PV-07 | RF4 | Solicitar un rol ocupado desde un cliente nuevo. | `ERROR reason=role_busy`; conservar al cliente original. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
+| PV-08 | RF4 | Fragmentar un `POST` o `SET` en TCP. | Procesarlo una sola vez tras recibir LF. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
+| PV-09 | RF4 | Agrupar mensajes en una lectura TCP. | Procesarlos en orden y conservar el fragmento final. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
+| PV-10 | RF4 | Líneas de 127 y 128 bytes de contenido antes de LF. | 127 cumple longitud, sujeto a sintaxis; 128 se rechaza. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
+| PV-11 | RF3, RF4 | Comando desconocido, argumentos incompletos, coma decimal, cero o rol incompatible. | Rechazo sin actuación parcial; cierre y apagado según corresponda. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
+| PV-12 | RF4 | Socket abierto sin completar registro en 2000 ms. | Cierre por plazo de registro y posterior reintento. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
+| PV-13 | RF3, RF4 | Sensor deja de enviar; servidor activo. | Tras 2000 ms: invalidar datos, apagar LEDs y liberar sensor. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
+| PV-14 | RF3, RF4 | Actuador no recibe comandos; desconexión aún no detectada. | Apagado local tras 2000 ms sin `SET`. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
+| PV-15 | RF3, RF4 | Desconexión detectada y recuperación. | Apagado, reintentos cada 2000 ms, nuevo registro y restauración válida. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
+| PV-16 | RF3, RF4 | Actuador se conecta con lectura reciente, inválida, antigua o inexistente. | Último estado reciente o todos apagados, según el protocolo. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
 
-Para PF-01 se apuntó el HC-SR04 hacia el techo con el fin de provocar ausencia de un eco válido dentro del timeout configurado. El monitor Serial mostró repetidamente:
+### 4.3 PN-01 — Estabilidad del sistema completo
 
-```text
-Tiempo: 20530 ms | Lectura invalida | Rango: Invalido
-Tiempo: 20780 ms | Lectura invalida | Rango: Invalido
-Tiempo: 21030 ms | Lectura invalida | Rango: Invalido
-Tiempo: 21280 ms | Lectura invalida | Rango: Invalido
-Tiempo: 21530 ms | Lectura invalida | Rango: Invalido
-Tiempo: 21780 ms | Lectura invalida | Rango: Invalido
-Tiempo: 22030 ms | Lectura invalida | Rango: Invalido
-Tiempo: 22280 ms | Lectura invalida | Rango: Invalido
-```
+**Criterio:** RNF1, ≥ 10 minutos sin reinicios ni bloqueos. Conservar eventos de los tres equipos y verificar continuidad de lecturas y actuación.
 
-Durante estas lecturas los tres LEDs permanecieron apagados, el sistema continuó ejecutándose normalmente y no hubo reinicios ni bloqueos. Por ello, la prueba funcional de lectura inválida, timeout y apagado de actuadores queda **APROBADA**.
+| Inicio | Fin | Duración | Reinicios por equipo | Bloqueos | Continuidad y fallos | Evaluación | Evidencia |
+|---|---|---|---|---|---|---|---|
+| [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
 
-### 4.3 Validación de exactitud
+### 4.4 PN-02 — Exactitud de medición
 
-Para cada distancia se registraron cinco lecturas. El error máximo absoluto de cada grupo corresponde al mayor valor de la diferencia absoluta entre una lectura y su referencia:
+**Criterio:** RNF2, error absoluto máximo ≤ 3 cm en el intervalo previsto de 3 a 150 cm. Agregar filas para referencias que cubran los tres rangos. Calcular `error absoluto = |lectura − referencia|` y conservar las lecturas individuales.
 
-```text
-error = distancia medida - distancia de referencia
-error máximo absoluto = máximo de |error|
-```
+| Referencia física (cm) | Lecturas (cm) y cantidad | Mínimo / máximo / promedio (cm) | Error absoluto máximo (cm) | Evaluación | Evidencia |
+|---|---|---|---|---|---|
+| [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
 
-El criterio declarado es un error máximo absoluto ≤ 3 cm dentro del intervalo validado físicamente de 3 cm a 30 cm.
+**Cobertura real del intervalo y análisis de errores:** [PENDIENTE DE MEDICIÓN]
 
-| Referencia | Lecturas registradas (cm) | Mínimo | Máximo | Promedio | Error máximo absoluto | Evaluación |
-|---:|---|---:|---:|---:|---:|---|
-| 3 cm | 3.31, 3.31, 3.31, 3.31, 3.31 | 3.31 cm | 3.31 cm | 3.310 cm | 0.31 cm | **APROBADA** |
-| 5 cm | 4.94, 4.94, 4.96, 4.94, 4.94 | 4.94 cm | 4.96 cm | 4.944 cm | 0.06 cm | **APROBADA** |
-| 6 cm | 6.24, 6.24, 6.26, 6.26, 6.26 | 6.24 cm | 6.26 cm | 6.252 cm | 0.26 cm | **APROBADA** |
-| 10 cm | 10.63, 10.63, 10.63, 10.63, 10.63 | 10.63 cm | 10.63 cm | 10.630 cm | 0.63 cm | **APROBADA** |
-| 15 cm | 14.75, 14.75, 14.75, 14.75, 14.75 | 14.75 cm | 14.75 cm | 14.750 cm | 0.25 cm | **APROBADA** |
-| 16 cm | 16.12, 16.12, 16.12, 16.12, 16.12 | 16.12 cm | 16.12 cm | 16.120 cm | 0.12 cm | **APROBADA** |
-| 20 cm | 19.98, 20.00, 20.00, 20.00, 19.98 | 19.98 cm | 20.00 cm | 19.992 cm | 0.02 cm | **APROBADA** |
-| 25 cm | 24.61, 24.61, 24.61, 24.61, 24.61 | 24.61 cm | 24.61 cm | 24.610 cm | 0.39 cm | **APROBADA** |
-| 30 cm | 29.81, 29.81, 29.81, 29.82, 29.81 | 29.81 cm | 29.82 cm | 29.812 cm | 0.19 cm | **APROBADA** |
+### 4.5 PN-03 — Tiempo de respuesta extremo a extremo
 
-Se analizaron 45 lecturas en total. La suma de sus errores absolutos es 11.02 cm, por lo que:
+**Criterio:** RNF3, ≤ 1 s desde el cambio físico de distancia hasta el cambio visible del actuador. Registrar ambos eventos con una referencia temporal común; los relojes locales no sincronizados no permiten restar timestamps de equipos distintos directamente.
 
-```text
-error absoluto promedio = 11.02 cm / 45 ≈ 0.245 cm
-```
+| Ensayo y transición de rango | Método y resolución temporal | Instante del cambio físico | Instante de actuación | Tiempo extremo a extremo | Evaluación | Evidencia |
+|---|---|---|---|---|---|---|
+| [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
 
-- Error máximo absoluto global: **0.63 cm**, observado en las lecturas de referencia de 10 cm.
-- Error absoluto promedio de todas las lecturas: **0.245 cm**.
-- Criterio requerido: error máximo absoluto ≤ 3 cm.
+**Repeticiones, máximo observado y análisis de demoras:** [PENDIENTE DE MEDICIÓN]
 
-Durante las pruebas realizadas entre 3 cm y 30 cm, el error máximo absoluto observado fue de 0.63 cm, cumpliendo el criterio de ≤ 3 cm dentro del intervalo validado. El error absoluto promedio fue de 0.245 cm. Por tanto, la prueba de exactitud queda **APROBADA** para dicho intervalo, sin generalizar el resultado a distancias no probadas.
+### 4.6 PN-04 — Frecuencia de muestreo
 
-### 4.4 Validación de estabilidad
+**Criterio:** RNF4, ≥ 2 lecturas/s. El intervalo propuesto de 250 ms equivale nominalmente a 4 lecturas/s, pero no constituye una medición. Contar por separado las lecturas obtenidas y los `POST` recibidos, indicando lecturas inválidas. Calcular `frecuencia = cantidad / duración en segundos`.
 
-Las pruebas de rangos y exactitud se realizaron durante la misma sesión continua del ESP32. La duración se obtuvo a partir del primer y último timestamp registrados:
+| Ventana de observación | Duración (s) | Lecturas obtenidas / inválidas | POST recibidos | Frecuencia sensor (lecturas/s) | Frecuencia recepción (POST/s) | Evaluación | Evidencia |
+|---|---|---|---|---|---|---|---|
+| [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
 
-```text
-duración = 1298003 ms - 142752 ms
-duración = 1155251 ms = 1155.251 s = 19 min 15.251 s
-```
+### 4.7 Incidencias y control de evidencias
 
-| Inicio | Fin | Duración total | Reinicios | Bloqueos | Continuidad de lecturas | Respuesta de LEDs | Fallos o interferencias observados | Evaluación |
-|---:|---:|---:|---:|---:|---|---|---|---|
-| 142752 ms | 1298003 ms | 1155251 ms (19 min 15.251 s) | 0 | 0 | El sensor continuó realizando lecturas | Los LEDs siguieron respondiendo correctamente | Ninguno | **APROBADA** |
+| Caso o requisito | Incidencia observada | Causa y acción correctiva | Repetición y resultado | Evidencia |
+|---|---|---|---|---|
+| [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE IMPLEMENTACIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
 
-La sesión superó los 10 minutos requeridos sin reinicios ni bloqueos. No se observaron fallos funcionales ni interferencias durante el proceso. Por tanto, la prueba de estabilidad queda **APROBADA**.
-
-### 4.5 Validación del tiempo de respuesta
-
-Esta validación es lógica y se basa en las constantes y el flujo del firmware; no representa una medición física. El caso conservador considera que el objeto cambia de rango justo después de una lectura. En ese instante puede esperar hasta un intervalo completo antes de la siguiente medición. A ello se suma el timeout máximo de `pulseIn()`:
-
-```text
-espera máxima hasta la siguiente medición = 250 ms
-timeout máximo de pulseIn                 =  30 ms
-tiempo teórico conservador                = 280 ms + procesamiento breve
-```
-
-| Elemento analizado | Valor máximo considerado |
-|---|---:|
-| Espera hasta la siguiente medición | 250 ms |
-| Ejecución de `pulseIn()` | 30 ms |
-| Base del peor caso teórico conservador | 280 ms |
-| Criterio requerido | 1000 ms |
-
-Después de obtener la lectura, `main.cpp` entrega inmediatamente la distancia al `ControladorLeds` y llama a `actualizar()`. El parpadeo no utiliza `delay()`, por lo que no introduce una espera bloqueante adicional. El procesamiento restante es pequeño frente al margen aproximado de 720 ms entre la base conservadora y el límite requerido.
-
-Por tanto, el diseño cumple lógicamente el requisito de tiempo de respuesta ≤ 1 segundo. Esta conclusión se limita al análisis del código y no afirma que se haya efectuado una medición física del tiempo de respuesta.
-
-**Evaluación: APROBADA mediante validación lógica del diseño, no mediante medición física.**
-
-### 4.6 Validación de la frecuencia de muestreo
-
-La frecuencia nominal se obtiene directamente del intervalo de medición configurado:
-
-```text
-frecuencia nominal = 1 / 0.250 s = 4 lecturas/s
-```
-
-Como escenario conservador, se suma el timeout máximo de 30 ms al intervalo configurado:
-
-```text
-intervalo conservador = 0.250 s + 0.030 s = 0.280 s
-frecuencia conservadora = 1 / 0.280 s ≈ 3.57 lecturas/s
-```
-
-| Escenario lógico | Intervalo considerado | Frecuencia calculada | Requisito | Evaluación |
-|---|---:|---:|---:|---|
-| Nominal | 250 ms | 4 lecturas/s | ≥ 2 lecturas/s | **APROBADA** |
-| Conservador con timeout máximo | 280 ms | ≈ 3.57 lecturas/s | ≥ 2 lecturas/s | **APROBADA** |
-
-En ambos casos se aplica `frecuencia = 1 / intervalo`: nominalmente, `1 / 0.250 s = 4 lecturas/s`; con el timeout máximo, `1 / 0.280 s ≈ 3.57 lecturas/s`. Ambos valores superan el mínimo requerido. Por tanto, el diseño cumple lógicamente el requisito de frecuencia de muestreo ≥ 2 lecturas/s.
-
-Esta es una validación lógica derivada de la temporización configurada en el firmware y no una medición experimental de frecuencia.
-
-**Evaluación: APROBADA mediante validación lógica del diseño, no mediante medición física.**
-
-La salida Serial se conserva como evidencia complementaria del funcionamiento, pero no es necesaria para justificar matemáticamente la frecuencia configurada.
-
-
-### 4.7 Control de evidencias
-
-El PDF respalda las mediciones numéricas, la clasificación de rangos, la respuesta ante una lectura inválida y los timestamps empleados en la validación de estabilidad. Las fotografías respaldan el montaje físico y la activación visual de los actuadores. Una fotografía estática no demuestra por sí sola el parpadeo; este comportamiento fue observado durante la prueba funcional.
-
-Las evidencias reales disponibles son:
-
-- [PDF de pruebas de rangos, exactitud y lectura inválida](<docs/evidencias/Pruebas de rangos.pdf>).
-- [Fotografía general del prototipo](docs/evidencias/prototipo.jpeg).
-- [Fotografía del LED rojo](docs/evidencias/led-rojo.jpeg).
-- [Fotografía del LED amarillo](docs/evidencias/led-amarillo.jpeg).
-- [Fotografía del LED verde](docs/evidencias/led-verde.jpeg).
-- [Fotografía de los tres LEDs](docs/evidencias/tres-colores-leds.jpeg).
-
-La descripción y relación de cada archivo con las pruebas se encuentra en [`docs/evidencias/README.md`](docs/evidencias/README.md).
+Relacionar cada registro con el índice de §8.2. Las fotografías estáticas documentarán el montaje y los estados visibles; la frecuencia de parpadeo y las mediciones temporales requieren registros adecuados.
 
 ## 5. Resultados
 
-Las pruebas realizadas respaldan el funcionamiento de los rangos, el tratamiento de lecturas inválidas, la exactitud y la estabilidad. El tiempo de respuesta y la frecuencia de muestreo se respaldan mediante validaciones lógicas del diseño y no deben interpretarse como mediciones físicas.
+### 5.1 Cumplimiento de requisitos
 
-| Aspecto | Objetivo | Resultado | Evaluación |
-|---|---|---|---|
-| Comportamiento de rangos | Coincidir con la lógica definida en RF2 y RF3 | Los rangos observados y el comportamiento físico coincidieron en 3, 5, 6, 10, 15, 16, 20, 25 y 30 cm | **APROBADA** |
-| Lectura inválida | Informar `Invalido` y mantener apagados los tres LEDs | Ocho registros consecutivos inválidos; LEDs apagados y ejecución normal | **APROBADA** |
-| Estabilidad | ≥ 10 minutos sin reinicios ni bloqueos | Desde 142752 ms hasta 1298003 ms: 1155251 ms (19 min 15.251 s) continuos, sin reinicios, bloqueos, fallos ni interferencias observados | **APROBADA** |
-| Exactitud | Error máximo absoluto ≤ 3 cm en el intervalo validado de 3 cm a 30 cm | Error máximo global de 0.63 cm y error absoluto promedio de 0.245 cm sobre 45 lecturas realizadas entre 3 cm y 30 cm | **APROBADA dentro del intervalo validado** |
-| Tiempo de respuesta | ≤ 1 segundo | ≈ 280 ms más procesamiento breve en el peor caso teórico conservador | **APROBADA mediante validación lógica; sin medición física** |
-| Frecuencia de muestreo | ≥ 2 lecturas/s | 4 lecturas/s nominales y ≈ 3.57 lecturas/s en el escenario conservador | **APROBADA mediante validación lógica; sin medición física** |
+| Requisito | Criterio de referencia | Resultado obtenido | Cumplimiento | Evidencia |
+|---|---|---|---|---|
+| RF1 | Medición ultrasónica y tratamiento de invalidez. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] | [PENDIENTE DE EVIDENCIA] |
+| RF2 | Tres rangos y límites de 50 y 100 cm. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] | [PENDIENTE DE EVIDENCIA] |
+| RF3 | Modos de LEDs y apagado según §1.2. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] | [PENDIENTE DE EVIDENCIA] |
+| RF4 | Comunicación TCP/WiFi y protocolo. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] | [PENDIENTE DE EVIDENCIA] |
+| RNF1 | ≥ 10 minutos sin reinicios ni bloqueos. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] | [PENDIENTE DE EVIDENCIA] |
+| RNF2 | Error máximo ≤ 3 cm en 3 a 150 cm. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] | [PENDIENTE DE EVIDENCIA] |
+| RNF3 | Respuesta extremo a extremo ≤ 1 s. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] | [PENDIENTE DE EVIDENCIA] |
+| RNF4 | ≥ 2 lecturas/s. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] | [PENDIENTE DE EVIDENCIA] |
+| RNF5 | Calidad del código según §3.4. | [PENDIENTE DE IMPLEMENTACIÓN] | [PENDIENTE DE EVIDENCIA] | [PENDIENTE DE EVIDENCIA] |
+
+### 5.2 Análisis crítico y limitaciones
+
+**Comparación de objetivos y resultados, errores, cobertura y restricciones del montaje distribuido:** [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA]
 
 ## 6. Conclusiones
 
-Las pruebas funcionales confirmaron la clasificación y el comportamiento físico esperado en los cuatro rangos, incluidos los límites de 5, 15 y 25 cm. También se comprobó que, ante la ausencia de un eco válido, el sistema informa el rango `Invalido`, mantiene apagados los tres LEDs y continúa ejecutándose sin reinicios ni bloqueos.
-
-Durante las 45 lecturas realizadas entre 3 cm y 30 cm, el error máximo absoluto global fue 0.63 cm y el error absoluto promedio fue aproximadamente 0.245 cm. Estos resultados respaldan el cumplimiento del criterio de error máximo absoluto ≤ 3 cm dentro del intervalo validado y no se generalizan a distancias fuera de él.
-
-La sesión continua comenzó en el timestamp 142752 ms y terminó en 1298003 ms. La diferencia fue 1155251 ms, equivalente a 19 min 15.251 s, sin reinicios, bloqueos, fallos funcionales ni interferencias observadas; por tanto, cumplió el mínimo de 10 minutos declarado para estabilidad.
-
-El diseño satisface lógicamente los requisitos de tiempo de respuesta y frecuencia de muestreo: el peor caso teórico conservador es de aproximadamente 280 ms más procesamiento breve, y las frecuencias calculadas son 4 lecturas/s en el caso nominal y aproximadamente 3.57 lecturas/s en el conservador. Estas dos conclusiones son teóricas y no constituyen mediciones físicas.
+**Conclusiones sobre el objetivo general y el cumplimiento de requisitos, fundamentadas en §4 y §5:** [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA]
 
 ## 7. Recomendaciones
 
-- Conservar los datos originales de las lecturas y los registros Serial junto con la versión del firmware utilizada.
-- Repetir las pruebas de estabilidad y exactitud si se modifica el hardware, el montaje o el firmware.
-- Mantener sin filtros ni calibraciones adicionales mientras los resultados continúen dentro del criterio; cualquier cambio futuro debe justificarse con nuevas mediciones.
-- Registrar el instrumento de referencia y las condiciones de la sesión en futuras repeticiones para mejorar la reproducibilidad.
-- Utilizar una captura Serial como comprobación complementaria de la frecuencia observada, manteniendo separada esa evidencia de la validación matemática actual.
-- Realizar una medición física del tiempo de respuesta si se desea complementar el límite demostrado lógicamente por el diseño.
+| Hallazgo que sustenta la recomendación | Recomendación técnica | Prioridad y validación propuesta |
+|---|---|---|
+| [PENDIENTE DE EVIDENCIA] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] |
 
 ## 8. Anexos
 
-### Anexo A. Código fuente
+### 8.1 Documentación y diagramas de referencia
 
-- [`src/main.cpp`](src/main.cpp)
-- [`include/SensorUltrasonico.h`](include/SensorUltrasonico.h)
-- [`src/SensorUltrasonico.cpp`](src/SensorUltrasonico.cpp)
-- [`include/ControladorLeds.h`](include/ControladorLeds.h)
-- [`src/ControladorLeds.cpp`](src/ControladorLeds.cpp)
-- [`platformio.ini`](platformio.ini)
+| Anexo | Documento existente | Uso |
+|---|---|---|
+| A | [Consigna oficial P2](docs/consigna/Práctica_2.md). | Requisitos, entregables y rúbrica. |
+| B | [Diseño del sistema P2](docs/diagramas/Diseno_del_sistema.md). | Arquitectura, clases, secuencias y protocolo propuestos. |
+| C | [Circuito sensor](docs/diagramas/circuito-sensor.svg) y [circuito actuador](docs/diagramas/circuito-actuador.svg). | Esquemas del diseño previo. |
+| D | [Informe P1 conservado](docs/historico/INFORME_P1.md). | Referencia histórica; sus evidencias corresponden a P1. |
 
-### Anexo B. Diagramas
+### 8.2 Índice de evidencias de la Práctica 2
 
-Los diagramas iniciales están incluidos en la sección 2 mediante Mermaid. El esquema vectorial detallado del cableado está disponible en [`docs/diagramas/circuito.svg`](docs/diagramas/circuito.svg).
+No se reutilizan las evidencias de la Práctica 1 como pruebas del sistema distribuido.
 
-### Anexo C. Evidencias
+| ID reservado | Evidencia por incorporar | Prueba o sección relacionada | Archivo / enlace | Fecha, responsable y versión |
+|---|---|---|---|---|
+| EV-P2-01 | Fotografías de ambos objetos y del montaje distribuido. | §2.2, §2.3 y §4.1. | [PENDIENTE DE EVIDENCIA] | [PENDIENTE DE EVIDENCIA] |
+| EV-P2-02 | Registros de mensajes, roles, errores y recuperación. | RF4; PV-06 a PV-16. | [PENDIENTE DE EVIDENCIA] | [PENDIENTE DE EVIDENCIA] |
+| EV-P2-03 | Registros funcionales, límites y parpadeo. | PV-01 a PV-05. | [PENDIENTE DE EVIDENCIA] | [PENDIENTE DE EVIDENCIA] |
+| EV-P2-04 | Registro continuo de estabilidad de los tres equipos. | PN-01. | [PENDIENTE DE EVIDENCIA] | [PENDIENTE DE EVIDENCIA] |
+| EV-P2-05 | Lecturas originales y referencia física. | PN-02. | [PENDIENTE DE EVIDENCIA] | [PENDIENTE DE EVIDENCIA] |
+| EV-P2-06 | Grabación o registro temporal extremo a extremo. | PN-03. | [PENDIENTE DE EVIDENCIA] | [PENDIENTE DE EVIDENCIA] |
+| EV-P2-07 | Conteos y ventanas de muestreo y recepción. | PN-04. | [PENDIENTE DE EVIDENCIA] | [PENDIENTE DE EVIDENCIA] |
+| EV-P2-08 | Registro de revisión de calidad del código. | RNF5 y §3.4. | [PENDIENTE DE EVIDENCIA] | [PENDIENTE DE EVIDENCIA] |
 
-Las evidencias utilizadas se encuentran en [`docs/evidencias/`](docs/evidencias/) y se describen en su [índice de evidencias](docs/evidencias/README.md). Como accesos directos se incluyen el [PDF principal de pruebas](<docs/evidencias/Pruebas de rangos.pdf>), la [fotografía general del prototipo](docs/evidencias/prototipo.jpeg) y las fotografías de activación de los LEDs [rojo](docs/evidencias/led-rojo.jpeg), [amarillo](docs/evidencias/led-amarillo.jpeg), [verde](docs/evidencias/led-verde.jpeg) y [los tres simultáneamente](docs/evidencias/tres-colores-leds.jpeg).
+### 8.3 Código y reproducción de la Práctica 2
 
-### Anexo D. Consigna
+**Enlaces a versiones finales del código, instrucciones de compilación, configuración y ejecución de los tres equipos:** [PENDIENTE DE IMPLEMENTACIÓN]
 
-La consigna original está disponible en [`docs/consigna/Practica_1.md`](docs/consigna/Practica_1.md).
+### 8.4 Aportes del grupo
+
+| Integrante | Aporte documentado | Commits o evidencia |
+|---|---|---|
+| Santiago Javier Torres Vacaflores | [PENDIENTE DE EVIDENCIA] | [PENDIENTE DE EVIDENCIA] |
+| Ariel Adrian Mercado Alegre | [PENDIENTE DE EVIDENCIA] | [PENDIENTE DE EVIDENCIA] |

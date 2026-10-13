@@ -1,6 +1,6 @@
 # Evidencias de pruebas y validaciones
 
-Esta carpeta contiene las evidencias reales utilizadas para respaldar las pruebas documentadas en [`INFORME.md`](../../INFORME.md). Incluye el registro de las mediciones y fotografías del montaje y de los actuadores en funcionamiento.
+Esta carpeta contiene las evidencias reales utilizadas para respaldar las pruebas documentadas en [`INFORME_P1.md`](../historico/INFORME_P1.md). Incluye el registro de las mediciones y fotografías del montaje y de los actuadores en funcionamiento.
 
 ## Evidencias disponibles
 
