@@ -14,6 +14,10 @@ endif()
 
 add_subdirectory(packages/Compartido)
 
+if(WIN32)
+    add_subdirectory(apps/servidor)
+endif()
+
 include(CTest)
 if(BUILD_TESTING)
     add_subdirectory(tests/native)

@@ -48,7 +48,7 @@ El límite es **127 bytes de contenido más LF: 128 bytes en el cable**. Una lí
 
 Al abrir una conexión nueva, llamar a `reiniciar()` para descartar fragmentos y errores anteriores. Una línea completa todavía debe pasar la validación de `ProtocoloAplicacion`: delimitarla no implica aceptar su comando.
 
-Las políticas de registro, roles ocupados, tiempos de espera y escrituras parciales se implementarán en los adaptadores TCP de las siguientes etapas. La especificación completa está en el [diseño del sistema](../../docs/diagramas/Diseno_del_sistema.md).
+El [servidor TCP de Windows](../../apps/servidor/README.md) implementa las políticas de registro, roles ocupados, ausencia de lecturas y escrituras parciales. Los adaptadores de los ESP32 se implementarán en las siguientes etapas. La especificación completa está en el [diseño del sistema](../../docs/diagramas/Diseno_del_sistema.md).
 
 ## Pruebas
 
