@@ -88,28 +88,130 @@ Los diagramas enlazados en esta sección representan la propuesta de la Práctic
 
 ### 2.1 Arquitectura distribuida del sistema
 
-Consultar el [diagrama de despliegue y las capas de comunicación](docs/diagramas/Diseno_del_sistema.md#1-arquitectura-del-sistema). Ambos ESP32 iniciarían conexiones TCP persistentes hacia la PC; la clasificación se realizaría en el servidor. Las IP del diagrama son ilustrativas y el puerto propuesto es `5000`.
+La arquitectura propuesta separa la adquisición de distancia, el procesamiento de las lecturas y la actuación física en tres equipos. Esta distribución responde al sistema exigido por la consigna y permite delimitar las responsabilidades de RF1–RF4: el objeto sensor obtiene los datos, la PC toma la decisión de control y el objeto actuador ejecuta sus órdenes. A diferencia del montaje de la Práctica 1, el sensor y los LEDs se ubican en ESP32 independientes y la clasificación deja de realizarse en el objeto que adquiere la distancia.
 
-| Componente previsto | Responsabilidad | Intercambio principal | Configuración real |
-|---|---|---|---|
-| ESP32 sensor y HC-SR04 | Medir cada 250 ms y comunicar lecturas válidas o inválidas. | `REGISTER type=sensor`, `POST`. | [PENDIENTE DE IMPLEMENTACIÓN] |
-| PC / servidor TCP | Registrar clientes, clasificar distancias y vigilar la ausencia de datos. | Recibir `POST`; enviar `OK`, `ERROR`, `SET`. | [PENDIENTE DE IMPLEMENTACIÓN] |
-| ESP32 actuador y tres LEDs | Aplicar comandos y mantener el parpadeo. | `REGISTER type=actuator`; recibir `SET`. | [PENDIENTE DE IMPLEMENTACIÓN] |
-| Router WiFi | Proporcionar conectividad IP entre los equipos. | Tráfico TCP sobre IEEE 802.11. | [PENDIENTE DE EVIDENCIA] |
+El ESP32 sensor deberá controlar el HC-SR04, convertir la duración del eco en centímetros y comunicar una lectura válida o su invalidez. La PC actuará como servidor TCP y entidad central de control: recibirá las lecturas, aplicará los rangos de §1.2 y generará los estados de los tres LEDs. El ESP32 actuador deberá recibir esos estados y mantener las salidas y el parpadeo correspondientes, sin clasificar distancias localmente. El diseño prevé firmware en C++ con Arduino y PlatformIO, y un servidor en C++ para Windows mediante sockets Winsock.
+
+El siguiente diagrama reproduce el [despliegue propuesto por el equipo](docs/diagramas/Diseno_del_sistema.md#11-diagrama-de-despliegue). **Todas las direcciones IP son ilustrativas y el puerto TCP `5000` es un parámetro previsto**, pendiente de contrastar con la implementación y la red del montaje.
+
+```mermaid
+flowchart LR
+    subgraph SENSOR["Objeto inteligente 1 — Sensor"]
+        HC["HC-SR04"]
+        ESP_S["ESP32 / ESP-WROOM-32<br/>Cliente TCP: sensor<br/>192.168.0.101<br/>Envía REGISTER y POST"]
+        ESP_S -->|TRIG: GPIO5| HC
+        HC -->|ECHO: divisor y GPIO18| ESP_S
+    end
+
+    ROUTER["Router WiFi<br/>IEEE 802.11<br/>192.168.0.1"]
+    PC["Servidor TCP — PC Windows<br/>C++ / sockets Winsock<br/>192.168.0.102:5000<br/>Clasifica distancias y envía SET"]
+
+    subgraph ACTUADOR["Objeto inteligente 2 — Actuador"]
+        ESP_A["ESP32 / ESP-WROOM-32<br/>Cliente TCP: actuator<br/>192.168.0.100<br/>Envía REGISTER y recibe SET"]
+        LR["LED rojo<br/>GPIO27"]
+        LA["LED amarillo<br/>GPIO26"]
+        LV["LED verde<br/>GPIO25"]
+        ESP_A --> LR
+        ESP_A --> LA
+        ESP_A --> LV
+    end
+
+    ESP_S <-.->|WiFi| ROUTER
+    ESP_A <-.->|WiFi| ROUTER
+    ROUTER <-.->|WiFi| PC
+
+    classDef sensor fill:#e8f1fb,stroke:#245b8a,color:#17202a;
+    classDef equipo fill:#f5f7fa,stroke:#263238,color:#17202a;
+    classDef rojo fill:#ffebee,stroke:#c62828,color:#17202a;
+    classDef amarillo fill:#fff8e1,stroke:#c9a000,color:#17202a;
+    classDef verde fill:#e8f5e9,stroke:#2e7d32,color:#17202a;
+    class HC,ESP_S sensor;
+    class ROUTER,PC,ESP_A equipo;
+    class LR rojo;
+    class LA amarillo;
+    class LV verde;
+```
+
+Las líneas discontinuas representan enlaces WiFi bidireccionales a través del router, que proporciona conectividad IP entre los equipos de la red local. El router transportará el tráfico y no participará en la clasificación ni en la generación de comandos. Los enlaces físicos de red deben distinguirse del flujo de aplicación: las lecturas viajarán del sensor al servidor y las órdenes del servidor al actuador.
+
+En el modelo cliente-servidor previsto, **ambos ESP32 iniciarán su propia conexión TCP persistente hacia la PC**. El servidor escuchará y aceptará las conexiones; utilizará cada socket para responder al registro y el socket del actuador para enviar órdenes. Por tanto, recibir comandos no convierte al ESP32 actuador en servidor ni exige que la PC abra una conexión nueva hacia él. El registro `REGISTER` identificará el rol de cada cliente, de modo que las direcciones de los ESP32 podrán obtenerse por DHCP según la configuración del montaje.
+
+| Componente previsto | Responsabilidad | Intercambio principal |
+|---|---|---|
+| ESP32 sensor y HC-SR04 | Adquirir distancia con intervalo nominal de 250 ms y comunicar lecturas válidas o inválidas. | Enviar `REGISTER type=sensor` y `POST`; recibir la respuesta de registro. |
+| PC / servidor TCP | Registrar clientes, clasificar lecturas, generar comandos y vigilar la ausencia de datos. | Recibir `REGISTER` y `POST`; enviar `OK`, `ERROR` y `SET`. |
+| ESP32 actuador y tres LEDs | Recibir órdenes y mantener los modos de los LEDs mediante la temporización local. | Enviar `REGISTER type=actuator`; recibir la respuesta de registro y `SET`. |
+| Router WiFi | Proporcionar conectividad IP entre los tres equipos. | Transportar el tráfico de las dos conexiones TCP sobre IEEE 802.11. |
+
+La comunicación se organiza en las cuatro capas del modelo TCP/IP utilizado en la práctica:
+
+| Capa | Elemento previsto | Función en el sistema |
+|---|---|---|
+| Aplicación | Protocolo de texto del grupo, descrito en §2.6. | Definir los mensajes de registro, lectura, actuación y error, así como su delimitación. |
+| Transporte | TCP y sockets; puerto del servidor previsto: `5000`. | Mantener las conexiones de los clientes y transportar el flujo ordenado de bytes. |
+| Internet | IPv4 en la red local. | Identificar los equipos mediante direcciones IP. |
+| Acceso a la red | WiFi, IEEE 802.11. | Proporcionar el enlace de los equipos con el router. |
+
+La implementación de los clientes y del servidor, incluida la configuración del puerto, permanece `[PENDIENTE DE IMPLEMENTACIÓN]`. La identificación de la red, las IP reales y la comprobación del recorrido completo permanecen `[PENDIENTE DE EVIDENCIA]`.
 
 ### 2.2 Circuito del objeto sensor
 
+El objeto sensor diseñado comprende un ESP32 / ESP-WROOM-32, un HC-SR04 y tres resistencias de 2.2 kΩ que forman el divisor resistivo de ECHO. El ESP32 se alimentará por USB de 5 V y suministrará la alimentación del sensor desde VIN / 5 V. El siguiente esquema corresponde exclusivamente al objeto de adquisición de la Práctica 2:
+
 ![Circuito propuesto del objeto sensor](docs/diagramas/circuito-sensor.svg)
 
-Consultar las [conexiones y el divisor de ECHO](docs/diagramas/Diseno_del_sistema.md#31-objeto-inteligente-con-sensor). El diseño utiliza TRIG en GPIO5 y ECHO mediante divisor resistivo en GPIO18.
+Las conexiones conservan la asignación del [diseño del objeto sensor](docs/diagramas/Diseno_del_sistema.md#31-objeto-inteligente-con-sensor):
+
+| Elemento o señal | Conexión prevista | Función |
+|---|---|---|
+| Alimentación del ESP32 | USB de 5 V. | Alimentar la placa del objeto sensor. |
+| HC-SR04 VCC | VIN / 5 V del ESP32. | Alimentar el sensor ultrasónico. |
+| HC-SR04 GND | GND del ESP32. | Establecer una referencia eléctrica común para alimentación y señales. |
+| HC-SR04 TRIG | GPIO5 del ESP32. | Recibir el pulso de disparo generado por el microcontrolador. |
+| HC-SR04 ECHO | ECHO → R1 de 2.2 kΩ → nodo conectado a GPIO18. | Conducir el pulso de eco hacia la entrada mediante el divisor. |
+| Retorno del divisor | Nodo GPIO18 → R2 de 2.2 kΩ → R3 de 2.2 kΩ → GND. | Formar la rama inferior de 4.4 kΩ del divisor. |
+
+El pulso enviado por GPIO5 a TRIG iniciará la medición. El ESP32 medirá en GPIO18 la duración de ECHO para obtener la distancia. El diseño conserva un pulso TRIG de 10 µs y un timeout de ECHO de 30000 µs; estos valores son parámetros previstos, cuya aplicación deberá comprobarse al revisar el firmware. La detección de una lectura inválida seguirá el comportamiento definido en §1.2.
+
+El divisor es necesario porque ECHO utiliza una señal de 5 V, superior al nivel lógico de 3.3 V del ESP32. El diseño evita conectar ECHO directamente a GPIO18: R1 se sitúa entre ECHO y el nodo de lectura, mientras R2 y R3 están en serie entre ese nodo y GND. La tensión ideal en el nodo se obtiene mediante:
+
+```text
+Rsuperior = R1 = 2.2 kΩ
+Rinferior = R2 + R3 = 2.2 kΩ + 2.2 kΩ = 4.4 kΩ
+VGPIO18 = VECHO × Rinferior / (Rsuperior + Rinferior)
+VGPIO18 = 5 V × 4.4 kΩ / (2.2 kΩ + 4.4 kΩ)
+VGPIO18 ≈ 3.33 V
+```
+
+Este resultado es un cálculo ideal con los valores nominales del diseño, no una tensión medida ni una validación eléctrica del montaje. La tierra común une el ESP32, el HC-SR04 y el retorno del divisor dentro de este objeto. El segundo ESP32 tendrá su propio circuito de actuación; la comunicación prevista entre ambos objetos se realizará por WiFi.
+
+**Aplicación de los parámetros de adquisición en el firmware:** [PENDIENTE DE IMPLEMENTACIÓN]
 
 **Montaje final, lista de componentes y correspondencia con el esquema:** [PENDIENTE DE EVIDENCIA]
 
+**Comprobación de la alimentación y tensión real del nodo ECHO:** [PENDIENTE DE MEDICIÓN]
+
 ### 2.3 Circuito del objeto actuador
+
+El objeto actuador diseñado comprende un segundo ESP32 / ESP-WROOM-32, tres LEDs —rojo, amarillo y verde— y tres resistencias de 220 Ω, una por LED. La placa se alimentará mediante USB de 5 V. Los LEDs serán controlados por señales GPIO de 3.3 V, según el esquema; la alimentación USB no equivale a aplicar 5 V a estas salidas.
 
 ![Circuito propuesto del objeto actuador](docs/diagramas/circuito-actuador.svg)
 
-Consultar las [conexiones de los LEDs](docs/diagramas/Diseno_del_sistema.md#32-objeto-inteligente-con-actuadores). El diseño asigna GPIO27 al rojo, GPIO26 al amarillo y GPIO25 al verde, con una resistencia de 220 Ω por LED.
+Las tres ramas conservan la polaridad y las conexiones del [diseño del objeto actuador](docs/diagramas/Diseno_del_sistema.md#32-objeto-inteligente-con-actuadores):
+
+| Elemento | Conexión prevista |
+|---|---|
+| Alimentación del ESP32 | USB de 5 V. |
+| LED verde | GPIO25 → ánodo del LED → cátodo → resistencia RV de 220 Ω → GND. |
+| LED amarillo | GPIO26 → ánodo del LED → cátodo → resistencia RA de 220 Ω → GND. |
+| LED rojo | GPIO27 → ánodo del LED → cátodo → resistencia RR de 220 Ω → GND. |
+| Retorno común | Las tres resistencias retornan al GND de este ESP32. |
+
+Cada resistencia se conecta en serie con su LED para limitar la corriente de su rama. El retorno compartido proporciona la referencia eléctrica común del objeto actuador. Con esta polaridad, un nivel alto en el GPIO encenderá el LED y un nivel bajo lo apagará; la alternancia temporizada producirá el parpadeo. El esquema no incluye el HC-SR04, que pertenece al objeto sensor independiente.
+
+La PC deberá generar el comando `SET` con los estados de los tres LEDs después de clasificar la lectura. El ESP32 actuador deberá interpretar el comando completo y entregarlo al controlador de salidas, que mantendrá los modos recibidos y actualizará el parpadeo mediante `millis()`. Esta separación distingue la decisión de control, ejecutada en el servidor, de la ejecución física y su temporización, realizadas en el actuador. Los rangos y frecuencias se mantienen definidos en §1.2; el circuito aporta las salidas necesarias para representarlos.
+
+**Recepción de comandos y control de salidas conforme al diseño:** [PENDIENTE DE IMPLEMENTACIÓN]
 
 **Montaje final, lista de componentes y correspondencia con el esquema:** [PENDIENTE DE EVIDENCIA]
 
