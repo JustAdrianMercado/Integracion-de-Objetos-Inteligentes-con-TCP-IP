@@ -2,3 +2,11 @@ add_executable(pruebas_control_distancia control_distancia.cpp)
 target_link_libraries(pruebas_control_distancia PRIVATE Compartido)
 
 add_test(NAME control_distancia COMMAND pruebas_control_distancia)
+
+add_executable(pruebas_protocolo_aplicacion protocolo_aplicacion.cpp)
+target_link_libraries(pruebas_protocolo_aplicacion PRIVATE Compartido)
+add_test(NAME protocolo_aplicacion COMMAND pruebas_protocolo_aplicacion)
+
+add_executable(pruebas_receptor_lineas receptor_lineas.cpp)
+target_link_libraries(pruebas_receptor_lineas PRIVATE Compartido)
+add_test(NAME receptor_lineas COMMAND pruebas_receptor_lineas)
