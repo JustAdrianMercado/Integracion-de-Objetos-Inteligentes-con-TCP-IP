@@ -589,19 +589,126 @@ Las secuencias conservan la separación entre interpretación, clasificación, a
 
 ### 2.6 Protocolo de aplicación TCP
 
-La [especificación propuesta](docs/diagramas/Diseno_del_sistema.md#6-especificación-del-protocolo-de-aplicación) define líneas ASCII delimitadas por LF (`\n`), con hasta 127 bytes de contenido y 128 bytes incluyendo LF. Prevé reconstruir mensajes fragmentados y separar mensajes agrupados en el flujo TCP.
+TCP transporta un flujo ordenado de bytes; una recepción del socket no equivale necesariamente a un mensaje completo. El protocolo del grupo define el contenido, la delimitación y el significado de los mensajes que satisfacen RF4. Su [especificación de diseño](docs/diagramas/Diseno_del_sistema.md#6-especificación-del-protocolo-de-aplicación) se concreta en implementaciones independientes: [protocolo.py](apps/servidor/protocolo.py) para el servidor y [ProtocoloAplicacion.cpp](packages/Compartido/src/ProtocoloAplicacion.cpp) para la biblioteca C++. La integración de esta última en los clientes TCP de los ESP32 sigue pendiente.
 
-| Mensaje previsto | Dirección | Finalidad |
+#### 2.6.1 Codificación, delimitación y tamaño
+
+| Propiedad | Regla implementada |
+|---|---|
+| Codificación del contenido | ASCII imprimible: bytes de `0x20` a `0x7E`. La sintaxis restringe además los caracteres de cada campo. |
+| Delimitador transmitido | Un byte LF, `0x0A`, al finalizar cada mensaje. |
+| Longitud máxima | 127 bytes de contenido más LF: 128 bytes por línea transmitida, sin incluir cabeceras de TCP/IP. |
+| Longitud mínima | Contenido no vacío; un LF aislado se rechaza. |
+| Separación y campos | Un espacio ASCII entre comando y argumentos y entre argumentos; formato `clave=valor`, con nombres y orden exactos. |
+| Mayúsculas | Comandos, claves y valores sensibles a mayúsculas; `REGISTER`, `distance` y `invalid` deben conservar su escritura. |
+| Caracteres rechazados | CR, NUL, tabuladores, otros controles, DEL y bytes fuera del ASCII imprimible. No se admite CRLF. |
+| Buffer C++ | Hasta 127 bytes de contenido y un terminador local NUL (`\0`): capacidad de 128 bytes, sin LF. |
+
+No se admiten espacios iniciales o finales, campos adicionales, claves repetidas ni cambios de orden. Un carácter imprimible puede superar la validación de delimitación y aun así ser inválido para un comando: por ejemplo, `UNKNOWN` es contenido ASCII, pero no un mensaje del protocolo.
+
+**Contenido y transmisión son representaciones distintas.** El contenido `OK` tiene dos bytes; en el cable se transmiten esos bytes seguidos de LF, tres en total. El buffer C++ almacena `O`, `K` y `\0`; ese NUL no se transmite. El receptor retira LF antes de entregar el contenido al intérprete. En los ejemplos escritos, `\n` representa un único byte LF, no los caracteres barra invertida y letra `n`. El límite de 128 bytes en el cable y la capacidad local de 128 bytes coinciden numéricamente, pero reservan su último byte para delimitadores diferentes.
+
+#### 2.6.2 Reconstrucción del flujo recibido
+
+Cada conexión mantiene su propio receptor. El [ReceptorLineas Python](apps/servidor/protocolo.py) conserva bytes entre bloques y entrega cada línea mediante un generador; el [ReceptorLineas C++](packages/Compartido/src/ReceptorLineas.cpp) recibe un byte por llamada y señala `Incompleto`, `LineaCompleta` o `MensajeInvalido`.
+
+Un mensaje fragmentado, como `REGI` seguido de `STER type=sensor\n`, se interpreta una sola vez después de recibir LF. Si un bloque contiene `OK\nSET redLed=off yellowLed=off greenLed=on\nPOST dist`, se entregan las dos líneas completas en orden y se conserva `POST dist` para la recepción siguiente. Una línea de 127 bytes puede esperar LF; un byte adicional de contenido provoca rechazo inmediato. Los mensajes completos anteriores a un error posterior del mismo bloque no se deshacen ni se procesan de nuevo.
+
+Una línea incompleta no se entrega al intérprete ni renueva por sí sola los plazos de registro o de actividad del sensor. El servidor continúa atendiendo sockets y temporizadores; si la conexión se cierra, descarta su fragmento. Un error de delimitación deja el receptor en estado rechazado. Python crea uno nuevo para otra sesión; C++ dispone de `reiniciar()`. La sintaxis se comprueba después de delimitar: un error sintáctico no constituye un resultado de distancia y el servidor aplica la política de rechazo de §2.6.5. En C++, `linea()` debe leerse después de `LineaCompleta` y antes de agregar el siguiente byte, porque el almacenamiento pertenece al receptor.
+
+#### 2.6.3 Mensajes y ejemplos de intercambio
+
+La dirección expresa el uso permitido por la aplicación. Reconocer sintácticamente una línea no autoriza su recepción en cualquier rol o estado de sesión.
+
+| Mensaje | Dirección | Sintaxis del contenido | Parámetros | Finalidad | Condición de aceptación o emisión |
+|---|---|---|---|---|---|
+| `REGISTER` | Cliente → servidor | `REGISTER type=<tipo>` | `tipo`: `sensor` o `actuator`. | Solicitar la reserva de un rol. | Primer mensaje de aplicación de una conexión no registrada, dentro del plazo y con el rol disponible. |
+| `OK` | Servidor → cliente | `OK` | Ninguno. | Confirmar exclusivamente el registro. | El servidor lo emite al reservar el rol; los futuros clientes deben esperar esta confirmación antes de operar. |
+| `POST` | Sensor → servidor | `POST distance=<valor>` | Decimal aceptado en cm o token `invalid`. | Comunicar una medición o su invalidez. | Solo desde la conexión registrada como sensor; línea completa y valor válido para el protocolo. |
+| `SET` | Servidor → actuador | `SET redLed=<estado> yellowLed=<estado> greenLed=<estado>` | Cada estado: `off`, `on`, `blink_2` o `blink_4`. | Comunicar conjuntamente los estados de los tres LEDs. | El servidor lo emite para un actuador registrado. Su aceptación y ejecución en el ESP32 siguen pendientes; el servidor rechaza un `SET` enviado por sus clientes. |
+| `ERROR` | Servidor → cliente | `ERROR reason=<motivo>` | `invalid_message`, `not_registered` o `role_busy`. | Notificar el rechazo de un mensaje o registro. | El servidor encola la respuesta y cierra la conexión rechazada conforme a su política de sesión. |
+
+Los textos entre `< >` son variables descriptivas, no caracteres transmitidos. `sensor` identifica al objeto que publica lecturas y `actuator` al que recibe órdenes. Los estados representan apagado, encendido fijo y parpadeo de dos o cuatro ciclos completos por segundo, respectivamente. La generación de estados está implementada en el servidor; la temporización física del actuador permanece prevista según §1.2.
+
+El ejemplo siguiente muestra líneas válidas de un recorrido objetivo. Los registros y `POST` proceden de las conexiones correspondientes; `OK` y `SET` proceden del servidor. No es una transcripción de una prueba realizada:
+
+```text
+REGISTER type=sensor\n
+OK\n
+REGISTER type=actuator\n
+OK\n
+SET redLed=off yellowLed=off greenLed=off\n
+POST distance=45.00\n
+SET redLed=blink_4 yellowLed=off greenLed=off\n
+POST distance=invalid\n
+SET redLed=off yellowLed=off greenLed=off\n
+```
+
+Si otro cliente solicita un rol ocupado, el servidor emite, por ejemplo, `ERROR reason=role_busy\n` en esa conexión nueva y conserva el registro original.
+
+Debe distinguirse la invalidez de una medición del rechazo de un mensaje:
+
+| Situación | Ejemplo de contenido | Interpretación y efecto en el servidor |
 |---|---|---|
-| `REGISTER type=<sensor o actuator>` | Cliente → servidor | Solicitar el registro del rol. |
-| `OK` | Servidor → cliente | Confirmar exclusivamente el registro. |
-| `POST distance=<decimal positivo o invalid>` | Sensor → servidor | Comunicar una lectura en cm o su invalidez. |
-| `SET redLed=<estado> yellowLed=<estado> greenLed=<estado>` | Servidor → actuador | Aplicar los tres modos: `off`, `on`, `blink_2` o `blink_4`. |
-| `ERROR reason=<motivo>` | Servidor → cliente | Rechazar un mensaje o registro y cerrar la conexión. |
+| Lectura numérica válida | `POST distance=45.00` | Interpreta una distancia positiva y genera el comando del rango correspondiente. |
+| Lectura física inválida comunicada correctamente | `POST distance=invalid` | Mensaje válido: entrega NaN al dominio, genera todos apagados y renueva la actividad del sensor. |
+| Valor numérico no aceptado | `POST distance=0` | Mensaje inválido: cero no pertenece al dominio numérico del protocolo; no se normaliza automáticamente a `invalid` al recibirlo. |
+| Mensaje mal formado | `POST distance=45,00` o `SET redLed=off` | Sintaxis inválida: no entrega una lectura ni un comando parcial y aplica `invalid_message`. |
 
-Los campos entre `< >` son marcadores descriptivos. El registro, la ausencia de datos y los reintentos contemplan plazos de 2000 ms según el diseño. La especificación completa conserva las reglas de sintaxis, orden, errores y recuperación.
+#### 2.6.4 Representación decimal y conversión numérica
 
-**Correspondencia con el protocolo implementado y ejemplos reales de intercambio:** [PENDIENTE DE IMPLEMENTACIÓN] / [PENDIENTE DE EVIDENCIA]
+La gramática numérica es `[0-9]+(?:\.[0-9]+)?`: una parte entera obligatoria y una fracción opcional con al menos un dígito. Se aceptan `45`, `45.00`, `00045.50` y `0.01`; se rechazan signos, coma, notación científica, `.5`, `1.`, `NaN` e `Infinity`. El resultado debe permanecer finito y estrictamente positivo tras la conversión, sin exceder el máximo permitido.
+
+El contrato adopta **float32** para conservar la representación de distancia de los clientes C++ previstos. Python interpreta primero con `float()`, comprueba el máximo binario32 definido en `MAX_FLOAT32` y convierte mediante `struct.pack("!f", valor)` y `struct.unpack("!f", ...)`. Rechaza un valor que se convierta en cero. C++ acumula los dígitos en `double`, verifica el máximo de `std::numeric_limits<float>::max()` y convierte a `float`, comprobando nuevamente finitud y positividad. El dominio clasifica el valor convertido, no el decimal escrito considerado con precisión ilimitada.
+
+Los siguientes resultados son **expectativas del [contrato JSON](tests/contratos/protocolo.json)**, no mediciones ni pruebas declaradas aprobadas:
+
+| Contenido de `POST` | Interpretación o resultado esperado |
+|---|---|
+| `distance=49.99` | Rango rojo. |
+| `distance=50` | Rango amarillo; el límite pertenece al intervalo que comienza en 50 cm. |
+| `distance=49.99999999999999999` | Rango amarillo tras el redondeo al límite de 50 cm. |
+| `distance=99.99` | Rango amarillo. |
+| `distance=100` | Rango verde; el límite pertenece al intervalo que comienza en 100 cm. |
+| `distance=99.99999999999999999` | Rango verde tras el redondeo al límite de 100 cm. |
+
+Las entradas demasiado grandes o tan pequeñas que se convierten en cero se rechazan, aunque tengan gramática decimal correcta. Un número pequeño representable no se rechaza únicamente por estar debajo de 3 cm: el dominio del protocolo se distingue del intervalo físico de exactitud de §1.3. Estos controles y el redondeo precisan la condición general de distancia finita positiva del diseño inicial; no cambian los límites de clasificación ni los objetivos de validación.
+
+El emisor C++ `crearLectura()` construye dos decimales mediante `snprintf()` y asegura el punto decimal, independientemente del separador del locale. Las expectativas de [protocolo_aplicacion.cpp](tests/native/protocolo_aplicacion.cpp) incluyen `45.126F` → `POST distance=45.13` y `0.001F` → `POST distance=invalid`, porque este último redondea a `0.00`. Cero, negativos y valores no finitos también se normalizan a `invalid` al construir la lectura. La recepción, en cambio, rechaza el texto numérico `0.00`. La reducción a dos decimales al emitir y la conversión a float32 al recibir son etapas diferentes de representación.
+
+Python y C++ usan procedimientos de interpretación distintos y no se presupone equivalencia numérica absoluta para todos los decimales. Los vectores permiten comparar decisiones de aceptación y comandos resultantes en entradas concretas; no demuestran igualdad exhaustiva de los valores internos ni exactitud física del sensor.
+
+#### 2.6.5 Implementaciones y políticas de sesión
+
+**Python.** `leer_mensaje()` devuelve la clase de datos inmutable `Mensaje`, con `tipo` y `valor`; una invalidez produce la excepción `MensajeInvalido`. `crear_comando()` y `crear_error()` construyen contenidos sin LF. `codificar()` valida ese contenido, lo codifica como ASCII y añade LF. El receptor retira LF y conserva fragmentos. En [servidor.py](apps/servidor/servidor.py), `EstadoSistema.procesar()` aplica las reglas de sesión y llama a `ControlDistancia.calcular_comando()` de [dominio.py](apps/servidor/dominio.py). `ColaEnvio` conserva el progreso de las escrituras parciales. Ninguna de estas funciones de protocolo se presenta como una clase Python `ProtocoloAplicacion`.
+
+**C++.** La [cabecera ProtocoloAplicacion.h](packages/Compartido/src/ProtocoloAplicacion.h) declara los métodos estáticos `crearRegistro`, `crearLectura`, `crearComando`, `crearOk`, `crearError` y sus métodos `leer...`. Devuelven `bool`; las operaciones de construcción reciben el buffer y su capacidad, incluido NUL, y no modifican la salida si fallan. Las de interpretación requieren una cadena terminada en NUL y conservan los datos de salida ante un fallo. `leerComando()` asigna `ComandoLeds` solo después de validar los tres campos. El [receptor C++](packages/Compartido/src/ReceptorLineas.h) delimita sin administrar sockets. El adaptador TCP futuro deberá incorporar LF al enviar y no transmitir NUL; ese adaptador y los programas ESP32 están [PENDIENTE DE IMPLEMENTACIÓN].
+
+La sintaxis define qué significa una línea; **el servidor decide si está permitida en la sesión**. Sus políticas implementadas, relacionadas con las secuencias de §2.5, son:
+
+- Cada conexión comienza sin rol y tiene 2000 ms para completar `REGISTER`. Solo se reserva un sensor y un actuador a la vez; `OK` confirma la reserva.
+- Después del registro, el servidor solo acepta `POST` desde el sensor. Un segundo `REGISTER`, mensajes de rol incompatible o `OK`, `SET` y `ERROR` recibidos desde clientes se rechazan como `invalid_message`.
+- La interpretación sintáctica precede a la comprobación de sesión: un `POST` válido sin registro produce `not_registered`, pero `POST distance=0` produce `invalid_message` aun antes del registro. Un registro correcto para un rol ya reservado produce `role_busy`.
+- El rechazo libera únicamente el rol de la sesión afectada, encola `ERROR` y permite terminar su envío antes de cerrar, con un plazo máximo adicional de cierre de 2000 ms. Si se libera el sensor, se invalidan sus datos y se encola apagado al actuador disponible. Un fallo de socket o saturación de recursos puede provocar cierre sin completar una respuesta de error.
+- Tras 2000 ms sin `POST` completo y válido, el servidor libera y cierra el sensor, invalida la lectura y encola apagado. `distance=invalid` renueva la actividad; los fragmentos no. Al registrar el actuador, envía el comando de una lectura de menos de 2000 ms o todos apagados si es inválida, antigua o inexistente.
+
+La recuperación prevista exige que los ESP32 reintenten WiFi/TCP, abran una conexión nueva y repitan el registro. El servidor ya puede aceptar ese registro posterior; no ejecuta los reintentos ni el watchdog local del actuador. Tampoco la existencia o el envío de `SET` acredita su aplicación física. El protocolo no incluye un acuse del actuador por cada comando.
+
+#### 2.6.6 Contrato común y verificación pendiente
+
+[tests/contratos/protocolo.json](tests/contratos/protocolo.json) contiene **127 vectores**, cada uno con `contenido` y `esperado`: **89 válidos**, cuyo resultado esperado es distinto de `INVALID`, y **38 inválidos**, cuyo resultado es `INVALID`. Incluye registros, respuestas, lecturas, límites numéricos, combinaciones de LEDs y rechazos de contenido. `INVALID` es una etiqueta del verificador, no un mensaje transmitido; tampoco equivale al token válido `distance=invalid`.
+
+En [test_protocolo.py](tests/python/test_protocolo.py), `test_contrato_documentado()` interpreta cada contenido y compara su resultado canónico con el esperado. Para `POST`, ese resultado es el `SET` generado por el dominio; para `SET`, la representación reconstruida; las otras líneas válidas conservan su contenido. `test_contrato_entre_python_y_cpp()` localiza [verificar_contrato](tests/native/verificar_contrato.cpp) mediante `IOT_CONTRACT_EXE` o las rutas de construcción previstas. Si no encuentra el ejecutable, omite la comparación cruzada mediante `skipTest`.
+
+Cuando el ejecutable está disponible, la prueba envía los contenidos codificados en hexadecimal al verificador C++; este reconstruye los bytes, añade LF para comprobar la recepción e interpreta y canoniza el mensaje. Se compara cada salida con el resultado esperado y con Python. Esta prueba verifica los vectores definidos, no todas las interacciones posibles de una sesión TCP ni la integración con placas.
+
+Las pruebas C++ de [protocolo_aplicacion.cpp](tests/native/protocolo_aplicacion.cpp) cubren construcción, interpretación, capacidades de buffer y rechazo sin cambios parciales; [receptor_lineas.cpp](tests/native/receptor_lineas.cpp) cubre fragmentos, mensajes consecutivos, longitud y estado de rechazo. La prueba de locale con coma puede omitirse si no existe uno instalado. Su presencia y la del contrato documentan el alcance disponible, sin declarar ejecución satisfactoria.
+
+**Resultados verificables de ejecución y comparación cruzada:** [PENDIENTE DE EVIDENCIA]
+
+**Integración del protocolo en ambos clientes ESP32:** [PENDIENTE DE IMPLEMENTACIÓN]
+
+**Intercambio real del sistema distribuido y mediciones físicas relacionadas:** [PENDIENTE DE EVIDENCIA] / [PENDIENTE DE MEDICIÓN]
 
 ### 2.7 Matriz de trazabilidad
 
