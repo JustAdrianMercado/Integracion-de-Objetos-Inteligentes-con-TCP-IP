@@ -126,7 +126,7 @@ flowchart LR
     G27[GPIO27] --> LR[LED rojo] --> RR[220 Ω] --> GND
 ```
 
-El esquema vectorial detallado puede consultarse en [`docs/diagramas/circuito.svg`](docs/diagramas/circuito.svg).
+El esquema vectorial detallado puede consultarse en [`docs/diagramas/circuito.svg`](../diagramas/circuito.svg).
 
 ### 2.4 Diseño estructural del software
 
@@ -440,14 +440,14 @@ El PDF respalda las mediciones numéricas, la clasificación de rangos, la respu
 
 Las evidencias reales disponibles son:
 
-- [PDF de pruebas de rangos, exactitud y lectura inválida](<docs/evidencias/Pruebas de rangos.pdf>).
-- [Fotografía general del prototipo](docs/evidencias/prototipo.jpeg).
-- [Fotografía del LED rojo](docs/evidencias/led-rojo.jpeg).
-- [Fotografía del LED amarillo](docs/evidencias/led-amarillo.jpeg).
-- [Fotografía del LED verde](docs/evidencias/led-verde.jpeg).
-- [Fotografía de los tres LEDs](docs/evidencias/tres-colores-leds.jpeg).
+- [PDF de pruebas de rangos, exactitud y lectura inválida](<../evidencias/Pruebas de rangos.pdf>).
+- [Fotografía general del prototipo](../evidencias/prototipo.jpeg).
+- [Fotografía del LED rojo](../evidencias/led-rojo.jpeg).
+- [Fotografía del LED amarillo](../evidencias/led-amarillo.jpeg).
+- [Fotografía del LED verde](../evidencias/led-verde.jpeg).
+- [Fotografía de los tres LEDs](../evidencias/tres-colores-leds.jpeg).
 
-La descripción y relación de cada archivo con las pruebas se encuentra en [`docs/evidencias/README.md`](docs/evidencias/README.md).
+La descripción y relación de cada archivo con las pruebas se encuentra en [`docs/evidencias/README.md`](../evidencias/README.md).
 
 ## 5. Resultados
 
@@ -485,21 +485,21 @@ El diseño satisface lógicamente los requisitos de tiempo de respuesta y frecue
 
 ### Anexo A. Código fuente
 
-- [`src/main.cpp`](src/main.cpp)
-- [`include/SensorUltrasonico.h`](include/SensorUltrasonico.h)
-- [`src/SensorUltrasonico.cpp`](src/SensorUltrasonico.cpp)
-- [`include/ControladorLeds.h`](include/ControladorLeds.h)
-- [`src/ControladorLeds.cpp`](src/ControladorLeds.cpp)
-- [`platformio.ini`](platformio.ini)
+- [`src/main.cpp`](../../apps/firmware/src/main.cpp)
+- [`include/SensorUltrasonico.h`](../../apps/firmware/include/SensorUltrasonico.h)
+- [`src/SensorUltrasonico.cpp`](../../apps/firmware/src/SensorUltrasonico.cpp)
+- [`include/ControladorLeds.h`](../../apps/firmware/include/ControladorLeds.h)
+- [`src/ControladorLeds.cpp`](../../apps/firmware/src/ControladorLeds.cpp)
+- [`platformio.ini`](../../platformio.ini)
 
 ### Anexo B. Diagramas
 
-Los diagramas iniciales están incluidos en la sección 2 mediante Mermaid. El esquema vectorial detallado del cableado está disponible en [`docs/diagramas/circuito.svg`](docs/diagramas/circuito.svg).
+Los diagramas iniciales están incluidos en la sección 2 mediante Mermaid. El esquema vectorial detallado del cableado está disponible en [`docs/diagramas/circuito.svg`](../diagramas/circuito.svg).
 
 ### Anexo C. Evidencias
 
-Las evidencias utilizadas se encuentran en [`docs/evidencias/`](docs/evidencias/) y se describen en su [índice de evidencias](docs/evidencias/README.md). Como accesos directos se incluyen el [PDF principal de pruebas](<docs/evidencias/Pruebas de rangos.pdf>), la [fotografía general del prototipo](docs/evidencias/prototipo.jpeg) y las fotografías de activación de los LEDs [rojo](docs/evidencias/led-rojo.jpeg), [amarillo](docs/evidencias/led-amarillo.jpeg), [verde](docs/evidencias/led-verde.jpeg) y [los tres simultáneamente](docs/evidencias/tres-colores-leds.jpeg).
+Las evidencias utilizadas se encuentran en [`docs/evidencias/`](../evidencias/) y se describen en su [índice de evidencias](../evidencias/README.md). Como accesos directos se incluyen el [PDF principal de pruebas](<../evidencias/Pruebas de rangos.pdf>), la [fotografía general del prototipo](../evidencias/prototipo.jpeg) y las fotografías de activación de los LEDs [rojo](../evidencias/led-rojo.jpeg), [amarillo](../evidencias/led-amarillo.jpeg), [verde](../evidencias/led-verde.jpeg) y [los tres simultáneamente](../evidencias/tres-colores-leds.jpeg).
 
 ### Anexo D. Consigna
 
-La consigna original está disponible en [`docs/consigna/Practica_1.md`](docs/consigna/Practica_1.md).
+La consigna original está disponible en [`docs/consigna/Practica_1.md`](../consigna/Practica_1.md).

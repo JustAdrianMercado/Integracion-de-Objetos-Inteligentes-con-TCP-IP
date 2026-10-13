@@ -5,9 +5,9 @@
 **Grupo:** 8  
 **Estado:** diseño previo a la implementación
 
-Este documento presenta nuestro diseño del sistema para resolver el [enunciado original del docente](../consigna/Practica_2.md). Reúne los diagramas y la especificación del protocolo de aplicación. Sigue el ejemplo del docente: un ESP32 con sensor, otro ESP32 con actuadores y una PC que concentra el control. Los comandos `REGISTER`, `POST` y `SET` mantienen los nombres del ejemplo.
+Este documento presenta nuestro diseño del sistema para resolver el [enunciado original del docente](../consigna/Práctica_2.md). Reúne los diagramas y la especificación del protocolo de aplicación. Sigue el ejemplo del docente: un ESP32 con sensor, otro ESP32 con actuadores y una PC que concentra el control. Los comandos `REGISTER`, `POST` y `SET` mantienen los nombres del ejemplo.
 
-El código fuente actual corresponde a la práctica 1. Las clases nuevas y los cambios de interfaz que se muestran aquí son propuestas para la práctica 2. El [informe anterior](../../INFORME.md) conserva los resultados y las evidencias del montaje original.
+El código fuente actual corresponde a la práctica 1. Las clases nuevas y los cambios de interfaz que se muestran aquí son propuestas para la práctica 2. El [informe anterior](../historico/INFORME_P1.md) conserva los resultados y las evidencias del montaje original.
 
 ## 1. Arquitectura del sistema
 
