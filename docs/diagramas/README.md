@@ -2,7 +2,7 @@
 
 ## Práctica 2 — Diseño del sistema
 
-El documento [`Diseno_del_sistema.md`](Diseno_del_sistema.md) contiene nuestro diseño: el diagrama de arquitectura, el diagrama de clases, las secuencias de mensajes y la especificación del protocolo de aplicación. Define dos clientes ESP32 y un servidor TCP en C++ para Windows.
+El documento [`Diseno_del_sistema.md`](Diseno_del_sistema.md) contiene nuestro diseño: el diagrama de arquitectura, el diagrama de clases, las secuencias de mensajes y la especificación del protocolo de aplicación. Define dos clientes ESP32 con firmware C++ y un servidor TCP Python. El [plan revisado](../PLAN_IMPLEMENTACION.md) recoge la migración de arquitectura y las siguientes etapas.
 
 Los circuitos de los objetos inteligentes están disponibles por separado:
 

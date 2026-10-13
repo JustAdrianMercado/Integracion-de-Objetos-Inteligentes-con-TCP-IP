@@ -1,73 +1,88 @@
 # Integración de objetos inteligentes con TCP/IP — Grupo 8
 
-Proyecto de la Práctica 2 de SIS-234, desarrollado por etapas en un monorepo. El sistema previsto conecta un ESP32 con un sensor HC-SR04, un servidor C++ en Windows y un ESP32 que controla tres LEDs.
+Monorepo de la Práctica 2 de SIS-234: dos clientes ESP32 con firmware C++ y un servidor TCP en Python 3.13 que clasifica las distancias y ordena los estados de los LEDs.
 
-La base de firmware conserva el funcionamiento local de la Práctica 1: un ESP32 mide distancias y controla los LEDs. La biblioteca `Compartido` contiene los estados, las reglas de distancia y el protocolo de aplicación. El servidor TCP para Windows ya atiende ambos roles y se prueba con clientes simulados en la PC; los clientes ESP32 se integrarán en las siguientes etapas.
+El servidor Python está implementado y se prueba con clientes simulados en la PC. El firmware actual conserva la base local de la Práctica 1; los programas independientes del sensor y del actuador se implementarán en las etapas 5 y 6.
 
-## Estructura del repositorio
+## Estructura
 
 ```text
 apps/
   firmware/
-    include/              Declaraciones del firmware ESP32
-    src/                  Implementación y programa principal
+    include/              Declaraciones de hardware; configuración de red en etapa 5
+    src/                  Base ESP32 actual; cliente/ se incorporará en etapa 5
   servidor/
-    include/              Servidor TCP y cola de envíos
-    src/                  Winsock y programa de consola para Windows
-    README.md             Compilación, ejecución y pruebas del servidor
+    __main__.py           Entrada de consola con argparse y logging
+    servidor.py           socketserver, sesiones, roles y colas de envío
+    dominio.py            Estados y reglas de distancia ejecutados en la PC
+    protocolo.py          Mensajes ASCII y receptor de líneas
+    README.md             Uso y funcionamiento del servidor
 packages/
-  Compartido/
-    src/                  Estados, roles, control de distancia y protocolo en C++
-    README.md             Uso de la biblioteca y recepción de mensajes
-    CMakeLists.txt        Compilación de la biblioteca para PC
+  Compartido/             Tipos y protocolo C++ reutilizables por ambos ESP32
+                          ControlDistancia C++ como referencia de las pruebas
 tests/
-  native/                 Pruebas en PC mediante CMake y CTest
-  firmware/               Directorio reservado para pruebas de PlatformIO
+  python/                 unittest: dominio, protocolo, concurrencia y TCP real
+  native/                 C++: dominio, protocolo y sensor con GPIO simulados
+  contratos/              Vectores para comprobar C++ y Python juntos
+  firmware/               Pruebas de PlatformIO
 docs/
-  consigna/               Enunciado de la práctica
-  diagramas/              Diseño y especificación del protocolo
-  evidencias/             Evidencias de pruebas y validaciones
-CMakeLists.txt            Configuración de C++ para PC
-platformio.ini            Configuración de los ESP32
-INFORME.md                Informe académico
+  PLAN_IMPLEMENTACION.md  Revisión de etapas y especificación de la etapa 5
+  diagramas/              Arquitectura, circuitos y contrato de aplicación
+  consigna/               Enunciado del docente
+CMakeLists.txt            Construcción y pruebas nativas C++
+platformio.ini            Construcción del firmware ESP32
+.python-version          Rama de Python utilizada: 3.13
+INFORME.md                Informe académico, trabajado por separado
 ```
 
-Las configuraciones de CMake y PlatformIO se mantienen en la raíz, desde donde se ejecutan los comandos.
+El [plan de implementación](docs/PLAN_IMPLEMENTACION.md) contiene el alcance de cada entrega. Cada etapa se desarrolla en su propia rama y queda sin commit ni push para su revisión y publicación manual.
 
-`packages/Compartido` reúne el código reutilizable por la PC y los ESP32. La lógica actual no depende de Arduino ni de Winsock. Las pruebas nativas y las de firmware tienen directorios distintos para que cada herramienta compile las que le corresponden.
+## Entorno
 
-La [guía de la biblioteca compartida](packages/Compartido/README.md) describe cómo crear e interpretar los mensajes y cómo conservar los fragmentos recibidos mediante `ReceptorLineas`.
+| Componente | Selección |
+|---|---|
+| Placas | Dos ESP32 clásicos, 240 MHz, 320 KB de RAM y 4 MB de flash. |
+| Firmware | C++ con Arduino-ESP32 2.0.17; `framework-arduinoespressif32@3.20017.0`. |
+| Construcción ESP32 | PlatformIO Core 6.2.0; `espressif32@7.0.1`. |
+| Servidor | Python 3.13, biblioteca estándar. |
+| Pruebas Python | `unittest`, sockets TCP locales y puertos libres. |
+| Pruebas C++ | CMake y CTest; g++ o MSVC, con GPIO simulados para el sensor. |
 
-## Compilar y ejecutar el servidor
+En esta PC las pruebas nativas se validan con MSVC, CMake y Ninja ya instalados. El servidor se ejecuta directamente con Python. Su uso no requiere compilar C++ ni instalar paquetes con pip.
 
-Desde una terminal de desarrollo de Visual Studio, en la raíz del repositorio:
+## Ejecutar el servidor
+
+Desde la raíz del repositorio, para pruebas en la misma PC:
 
 ```powershell
-cmake -S . -B build/windows -G Ninja -DCMAKE_BUILD_TYPE=Debug
-cmake --build build/windows
-.\build\windows\apps\servidor\servidor_tcp.exe --ip 127.0.0.1 --puerto 5000
+py -3.13 -m apps.servidor --ip 127.0.0.1 --puerto 5000
 ```
 
-Para la futura conexión con los ESP32, el servidor puede ejecutarse con `--ip 0.0.0.0`; los clientes usarán la IP real de la PC. La [guía del servidor](apps/servidor/README.md) detalla sus opciones y su funcionamiento.
+Para la red WiFi de los ESP32:
 
-## Herramientas necesarias
+```powershell
+py -3.13 -m apps.servidor --ip 0.0.0.0 --puerto 5000
+```
 
-- PlatformIO Core, o VS Code con la extensión PlatformIO IDE, para compilar y cargar el firmware Arduino.
-- Visual Studio con la carga de trabajo **Desarrollo para el escritorio con C++**, incluyendo MSVC, CMake, Ninja y el SDK de Windows, para compilar y probar el código de PC.
+Los clientes configurarán la IPv4 real de la PC como destino. `Ctrl+C` detiene el servidor. La [guía del servidor](apps/servidor/README.md) describe los roles, plazos, colas y opciones. En sistemas con Python 3.13 disponible como `python3`, se usa `python3 -m apps.servidor`.
 
-## Compilar el firmware
-
-Desde la raíz del repositorio, en una terminal de PlatformIO:
+## Compilar la base ESP32
 
 ```powershell
 pio run -e esp32doit-devkit-v1
 ```
 
-El entorno sigue configurado para `esp32doit-devkit-v1` y el monitor serie utiliza 115200 baudios. Los entornos separados para sensor y actuador se incorporarán al implementar cada cliente.
+Este entorno mantiene el programa local de referencia a 115200 baudios. Su filtro incluye únicamente sus tres archivos actuales. Los entornos `sensor` y `actuador` se habilitarán cuando existan sus programas principales, en las etapas 5 y 6.
 
-## Ejecutar las pruebas de PC
+## Pruebas
 
-Abrir **Developer PowerShell for Visual Studio** o **x64 Native Tools Command Prompt for Visual Studio**, situarse en la raíz del repositorio y ejecutar:
+Pruebas Python, desde la raíz:
+
+```powershell
+py -3.13 -m unittest discover -s tests/python -v
+```
+
+Pruebas C++ y Python juntas, desde una terminal de desarrollo de Visual Studio:
 
 ```powershell
 cmake -S . -B build/windows -G Ninja -DCMAKE_BUILD_TYPE=Debug
@@ -75,20 +90,26 @@ cmake --build build/windows
 ctest --test-dir build/windows --output-on-failure
 ```
 
-CTest ejecuta `control_distancia` (26 casos), `protocolo_aplicacion` y `receptor_lineas`; en Windows también ejecuta `cola_envio` y `servidor_tcp`. Estas pruebas cubren los mensajes, la validación de datos y buffers, los envíos parciales y los escenarios TCP con clientes simulados en la propia PC. La carpeta `build/` contiene archivos generados y está excluida de Git.
+Con g++ y Ninja disponibles se puede usar otra carpeta de construcción:
 
-## Etapas de implementación
+```sh
+cmake -S . -B build/native -G Ninja -DCMAKE_CXX_COMPILER=g++ -DCMAKE_BUILD_TYPE=Debug
+cmake --build build/native
+ctest --test-dir build/native --output-on-failure
+```
 
-1. **Completada:** biblioteca compartida de estados y control de distancia, con pruebas nativas.
-2. **Completada:** organización como monorepo y actualización de las rutas de compilación.
-3. **Completada:** codificación, lectura y validación del protocolo de aplicación, con recepción de líneas fragmentadas.
-4. **Implementada para revisión:** servidor TCP para Windows con Winsock, registro, recuperación y pruebas locales.
-5. **Pendiente:** cliente ESP32 del sensor.
-6. **Pendiente:** cliente ESP32 del actuador.
-7. **Pendiente:** integración, guía de cableado y pruebas con la PC y ambos ESP32.
+CMake incorpora `unittest` cuando encuentra Python 3.13. La prueba de contrato ejecuta el verificador C++ con los mismos 127 vectores que Python. Si se ejecuta `unittest` sin haber construido ese verificador, solo se omite esa comparación entre lenguajes. Las pruebas TCP usan `127.0.0.1` y puertos libres; verifican los plazos reales de 2 segundos y duran aproximadamente 16 segundos.
 
-A partir de la etapa 3, cada etapa se implementa en una rama propia. Los cambios quedan sin commit ni push para su revisión; se confirman y se suben manualmente antes de iniciar la siguiente etapa. La rama de la etapa 4 es `ft/tcp-server`.
+## Etapas
 
-## Documentación
+1. **Conservada:** estados y reglas C++ de referencia, con pruebas nativas.
+2. **Conservada:** organización como monorepo.
+3. **Conservada y ampliada:** protocolo C++ y contraparte Python, con pruebas de compatibilidad.
+4. **Migrada para revisión:** servidor Python que sustituye la implementación Winsock.
+5. **Pendiente:** cliente ESP32 sensor, adaptador WiFi/TCP y entorno `sensor`.
+6. **Pendiente:** cliente ESP32 actuador, estados y parpadeos, entorno `actuador`.
+7. **Pendiente:** integración física, cableado, configuración de la PC y pruebas con ambas placas.
 
-El [diseño del sistema y protocolo](docs/diagramas/Diseno_del_sistema.md) guía la implementación. El [informe académico](INFORME.md) se trabaja por separado; sus referencias a rutas se actualizarán al elaborar el informe final.
+La entrega actual se revisa en `fix/reorganize-architecture`, con el commit propuesto `fix: reorganize architecture`. La etapa 5 está [especificada en el plan](docs/PLAN_IMPLEMENTACION.md#etapa-5--cliente-esp32-sensor) para implementarla después de revisar y subir esta entrega.
+
+El [diseño del sistema](docs/diagramas/Diseno_del_sistema.md) conserva el contrato de mensajes. `INFORME.md` y la documentación histórica quedan a cargo del compañero que redacta el informe.

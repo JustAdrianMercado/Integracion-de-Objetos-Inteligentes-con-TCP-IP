@@ -23,7 +23,7 @@ flowchart LR
     end
 
     ROUTER["Router WiFi<br/>IEEE 802.11<br/>192.168.0.1"]
-    PC["Servidor TCP — PC Windows<br/>C++ / sockets Winsock<br/>192.168.0.102:5000<br/>Clasifica distancias y envía SET"]
+    PC["Servidor TCP — PC<br/>Python 3.13 / socketserver<br/>192.168.0.102:5000<br/>Clasifica distancias y envía SET"]
 
     subgraph ACTUADOR["Objeto inteligente 2 — Actuador"]
         ESP_A["ESP32 / ESP-WROOM-32<br/>Cliente TCP: actuator<br/>192.168.0.100<br/>Envía REGISTER y recibe SET"]
@@ -73,7 +73,7 @@ Las direcciones IP reproducen el esquema de referencia del docente y son ilustra
 | Internet | IPv4 dentro de la red local. |
 | Acceso a la red | WiFi, IEEE 802.11. |
 
-El firmware conservará C++ con Arduino y PlatformIO. El servidor se desarrollará también en C++, para Windows, con sockets nativos Winsock. Su adaptador de red realizará la escucha y aceptación de conexiones descritas en la [documentación de Microsoft](https://learn.microsoft.com/en-us/windows/win32/winsock/about-clients-and-servers).
+El firmware conserva C++ con Arduino-ESP32 2.0.17 y PlatformIO. El servidor se implementa en Python 3.13 con biblioteca estándar, utilizando [`socketserver.ThreadingTCPServer`](https://docs.python.org/3.13/library/socketserver.html), hilos de conexión y un bloqueo para roles y lectura. El [plan revisado](../PLAN_IMPLEMENTACION.md) detalla las etapas del firmware y sus filtros de compilación.
 
 ## 2. Rangos y lógica de control
 
@@ -205,10 +205,11 @@ classDiagram
     }
 
     class ServidorTcp {
-        -bool sensorRegistrado_
-        -bool actuadorRegistrado_
-        +iniciar(uint16_t puerto) bool
-        +actualizar(unsigned long tiempoActual)
+        <<Python>>
+        -EstadoSistema estado
+        +serve_forever()
+        +shutdown()
+        +server_close()
     }
 
     ComandoLeds --> EstadoLed : contiene tres estados
@@ -233,11 +234,11 @@ Las firmas representan las interfaces principales previstas. Las salidas de text
 |---|---|---|
 | ESP32 sensor | `SensorUltrasonico`, `ClienteTcp` | Medir y mantener la conexión del sensor. Su programa principal envía las lecturas. |
 | ESP32 actuador | `ControladorLeds`, `ClienteTcp` | Recibir órdenes y actualizar los GPIO. Su programa principal entrega los comandos al controlador. |
-| PC Windows | `ServidorTcp`, `ControlDistancia` | Atender ambos clientes y convertir cada lectura en un comando. |
+| PC Python | `ServidorTcp`, `EstadoSistema`, `ControlDistancia` de Python | Atender ambos clientes y convertir cada lectura en un comando. |
 | Dominio compartido | `EstadoLed`, `ComandoLeds` | Representar la actuación sin depender de GPIO o sockets. |
 | Protocolo compartido | `ProtocoloAplicacion`, `TipoCliente` | Traducir entre mensajes de texto y datos C++. |
 
-`ControlDistancia` y los tipos del dominio utilizan C++ independiente de Arduino y Winsock. Los adaptadores encapsulan el hardware y las conexiones; los programas principales coordinan las llamadas. Se conserva `SensorUltrasonico` y se adapta `ControladorLeds`: su futura entrada será un comando de estados, reemplazando la clasificación local que actualmente realiza `establecerDistancia()`.
+Los tipos y el protocolo C++ pertenecen al firmware; Python tiene sus equivalentes en `apps/servidor`. Las relaciones del diagrama representan responsabilidades y el contrato, cuya compatibilidad se verifica en `tests/contratos`. `ControlDistancia` C++ permanece como referencia de prueba y la versión Python ejecuta las reglas en la PC. Se conserva `SensorUltrasonico` y se adapta `ControladorLeds`: su futura entrada será un comando de estados, reemplazando la clasificación local que actualmente realiza `establecerDistancia()`.
 
 ## 5. Diagramas de secuencia
 
