@@ -22,7 +22,7 @@ py -3.13 -m apps.servidor --ip 0.0.0.0 --puerto 5000
 | `--puerto` | `5000` | Puerto entre 0 y 65535; 0 selecciona uno libre para pruebas. |
 | `--help` | — | Ayuda de argparse. |
 
-Los ESP32 usarán la IPv4 real de la PC y el puerto efectivo. La consola registra conexiones aceptadas por rol, lecturas, comandos y cierres por ausencia de datos. `Ctrl+C` cierra el servicio, los sockets y los hilos de conexión.
+Los ESP32 usan la IPv4 real de la PC y el puerto efectivo; al escuchar en `0.0.0.0`, la consola muestra las IPv4 locales candidatas para `IP_SERVIDOR`. La consola registra conexiones aceptadas por rol, lecturas, comandos y cierres por ausencia de datos. `Ctrl+C` cierra el servicio, los sockets y los hilos de conexión.
 
 ## Responsabilidades
 
@@ -45,11 +45,11 @@ La cola tiene su propio bloqueo para que un `SET` generado en el hilo del sensor
 - La desconexión o el rechazo del sensor invalida su lectura y envía todos apagados. Un sensor sin un `POST` completo durante 2000 ms se cierra y libera su rol.
 - La desconexión del actuador conserva la lectura reciente del sensor para el siguiente registro.
 - Un rol ocupado genera `role_busy`; un mensaje operativo válido antes del registro, `not_registered`; una sintaxis inválida, un segundo registro o un comando incompatible con el rol, `invalid_message`.
-- Un `ERROR` se conserva en la cola antes de cerrar la conexión; el cierre se fuerza si no termina de enviarse dentro de 2000 ms.
+- Un `ERROR` se conserva en la cola antes de cerrar la conexión; el cierre se fuerza si no termina de enviarse dentro de 2000 ms. Mientras tanto, la entrada adicional del cliente se lee y se descarta: cerrar con datos sin leer enviaría un RST que podría hacer perder el `ERROR`.
 - El límite es 127 bytes de contenido más LF. Se rechazan CR, NUL, controles y bytes fuera del ASCII imprimible.
 - Se admiten hasta 8 conexiones y 4096 bytes pendientes por conexión. Las conexiones que superan esos límites se cierran.
 
-La regla en ejecución pertenece a `dominio.py`: rojo a 4 Hz para menos de 50 cm, amarillo a 2 Hz desde 50 y antes de 100 cm, verde fijo desde 100 cm. El firmware del actuador implementará los parpadeos.
+La regla en ejecución pertenece a `dominio.py`: rojo a 4 Hz para menos de 50 cm, amarillo a 2 Hz desde 50 y antes de 100 cm, verde fijo desde 100 cm. El firmware del actuador ejecuta los parpadeos.
 
 Las distancias recibidas se convierten a float32 antes de clasificarlas, para conservar el comportamiento de los clientes C++ en valores muy próximos a los límites. Las pruebas de contrato comparan ambas implementaciones, sin enlazar C++ con Python.
 

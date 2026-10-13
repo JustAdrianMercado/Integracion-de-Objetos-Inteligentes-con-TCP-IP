@@ -137,20 +137,29 @@ def servidor_programado(bloques):
 @dataclass
 class PasoFirmware:
     intentos: int
-    mediciones: int
+    dato: str
     conectado: bool
     enviados: bytes
+
+    @property
+    def mediciones(self) -> int:
+        return int(self.dato)
+
+    @property
+    def leds(self) -> str:
+        """Niveles rojo, amarillo y verde informados por el puente del actuador."""
+        return self.dato
 
 
 class EnlaceFirmware:
     """Adapta los bytes del firmware compilado a un socket real, sin recodificarlos."""
 
-    def __init__(self, direccion):
+    def __init__(self, direccion, ejecutable=PUENTE):
         self.direccion = direccion
         self.conexion = None
         self.intentos = 0
         self.transmitido = bytearray()
-        self.proceso = subprocess.Popen([PUENTE], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        self.proceso = subprocess.Popen([ejecutable], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                         stderr=subprocess.PIPE, text=True, bufsize=1,
                                         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         self.respuestas = queue.Queue()
@@ -171,9 +180,9 @@ class EnlaceFirmware:
         except queue.Empty as error:
             raise AssertionError("El firmware simulado no atendio el ciclo principal") from error
         if linea is None:
-            raise AssertionError("El puente sensor termino antes de devolver los bytes")
-        intentos, mediciones, conectado, hexadecimales = linea.split()
-        resultado = PasoFirmware(int(intentos), int(mediciones), conectado == "1",
+            raise AssertionError("El puente del firmware termino antes de devolver los bytes")
+        intentos, dato, conectado, hexadecimales = linea.split()
+        resultado = PasoFirmware(int(intentos), dato, conectado == "1",
                                  b"" if hexadecimales == "-" else bytes.fromhex(hexadecimales))
         if not resultado.conectado or resultado.intentos != self.intentos:
             if self.conexion is not None:

@@ -51,6 +51,29 @@ add_test(NAME principal_sensor COMMAND pruebas_principal_sensor)
 add_executable(puente_sensor puente_sensor.cpp)
 target_link_libraries(puente_sensor PRIVATE firmware_sensor_simulado)
 
+add_library(controlador_leds_simulado STATIC
+    "${PROJECT_SOURCE_DIR}/apps/firmware/src/cliente/ControladorLeds.cpp"
+)
+target_include_directories(controlador_leds_simulado PUBLIC "${PROJECT_SOURCE_DIR}/apps/firmware/include")
+target_link_libraries(controlador_leds_simulado PUBLIC Compartido red_simulada)
+
+add_executable(pruebas_controlador_leds controlador_leds.cpp)
+target_link_libraries(pruebas_controlador_leds PRIVATE controlador_leds_simulado)
+add_test(NAME controlador_leds COMMAND pruebas_controlador_leds)
+
+add_library(firmware_actuador_simulado STATIC
+    "${PROJECT_SOURCE_DIR}/apps/firmware/src/cliente/PrincipalActuador.cpp"
+)
+target_include_directories(firmware_actuador_simulado BEFORE PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/fakes/configuracion")
+target_link_libraries(firmware_actuador_simulado PUBLIC cliente_tcp_simulado controlador_leds_simulado)
+
+add_executable(pruebas_principal_actuador principal_actuador.cpp)
+target_link_libraries(pruebas_principal_actuador PRIVATE firmware_actuador_simulado)
+add_test(NAME principal_actuador COMMAND pruebas_principal_actuador)
+
+add_executable(puente_actuador puente_actuador.cpp)
+target_link_libraries(puente_actuador PRIVATE firmware_actuador_simulado)
+
 find_package(Python3 3.13 QUIET COMPONENTS Interpreter)
 if(Python3_FOUND)
     add_test(NAME servidor_python
@@ -58,7 +81,7 @@ if(Python3_FOUND)
     )
     set_tests_properties(servidor_python PROPERTIES
         WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
-        ENVIRONMENT "IOT_CONTRACT_EXE=$<TARGET_FILE:verificar_contrato>;IOT_SENSOR_EXE=$<TARGET_FILE:puente_sensor>"
+        ENVIRONMENT "IOT_CONTRACT_EXE=$<TARGET_FILE:verificar_contrato>;IOT_SENSOR_EXE=$<TARGET_FILE:puente_sensor>;IOT_ACTUATOR_EXE=$<TARGET_FILE:puente_actuador>"
         TIMEOUT 90
     )
 else()

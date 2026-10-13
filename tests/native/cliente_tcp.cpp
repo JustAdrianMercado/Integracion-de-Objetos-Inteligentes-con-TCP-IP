@@ -40,20 +40,21 @@ int main() {
         auto cliente = crearCliente();
         cliente.iniciar();
         comprobar(red.modoWifi == WIFI_STA && !red.autoReconnect, "WiFi en modo estacion con reintentos controlados");
+        comprobar(red.wifiSinAhorro, "Desactivar el modem-sleep para no retrasar la recepcion");
         comprobar(!cliente.enviar("POST distance=45.00"), "No publicar antes de abrir TCP");
         cliente.actualizar();
         comprobar(red.intentosWifi == 1 && red.intentosTcp == 0, "Primer intento WiFi inmediato sin TCP");
-        red.reloj = 1999;
+        red.reloj = 9999;
         cliente.actualizar();
-        comprobar(red.intentosWifi == 1, "No repetir WiFi antes de 2000 ms");
-        red.reloj = 2000;
+        comprobar(red.intentosWifi == 1, "No reiniciar una asociacion WiFi en curso antes de 10000 ms");
+        red.reloj = 10000;
         cliente.actualizar();
-        comprobar(red.intentosWifi == 2, "Reintentar WiFi al cumplirse el intervalo");
+        comprobar(red.intentosWifi == 2, "Reintentar WiFi al vencer el plazo de asociacion");
         red.wifiConectado = true;
         cliente.actualizar();
         comprobar(red.salida == "REGISTER type=sensor\n", "Registrar el rol sensor con LF sin NUL");
-        comprobar(red.timeoutConexion == 250 && red.puertoTcp == 5000 && red.noDelay,
-                  "Acotar connect a 250 ms y habilitar TCP_NODELAY");
+        comprobar(red.timeoutConexion == 1000 && red.puertoTcp == 5000 && red.noDelay,
+                  "Acotar connect a 1000 ms y habilitar TCP_NODELAY");
         comprobar(red.flagsEnvio == MSG_DONTWAIT && red.flagsRecepcion == MSG_DONTWAIT,
                   "Enviar y recibir sin esperas internas");
         comprobar(!cliente.estaRegistrado() && !cliente.enviar("POST distance=45.00"), "Esperar OK antes del POST");
@@ -166,6 +167,10 @@ int main() {
         comprobar(red.intentosWifi == 0, "Esperar el intervalo tras perder WiFi");
         red.reloj = 2050; cliente.actualizar();
         comprobar(red.intentosWifi == 1, "Reintentar WiFi despues de una perdida");
+        red.reloj = 12049; cliente.actualizar();
+        comprobar(red.intentosWifi == 1, "Dejar 10000 ms a la asociacion iniciada tras la perdida");
+        red.reloj = 12050; cliente.actualizar();
+        comprobar(red.intentosWifi == 2, "Repetir la asociacion si no se completo");
         red.wifiConectado = true; cliente.actualizar();
         comprobar(red.salida == "REGISTER type=sensor\n", "Recuperar WiFi exige un registro nuevo");
     }

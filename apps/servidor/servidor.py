@@ -93,7 +93,7 @@ class EstadoSistema:
         if actuador is not None:
             linea = crear_comando(comando)
             self._encolar(actuador, linea)
-            LOG.info(linea)
+            LOG.info("%s", linea)
 
     def procesar(self, sesion: Sesion, linea: str):
         mensaje = leer_mensaje(linea)
@@ -121,7 +121,7 @@ class EstadoSistema:
                 sesion.ultima_actividad = ahora
                 self.ultima_lectura = ahora
                 self.ultimo_comando = ControlDistancia.calcular_comando(mensaje.valor)
-                LOG.info(linea)
+                LOG.info("%s", linea)
                 self._actuar(self.ultimo_comando)
 
     def rechazar(self, sesion: Sesion, motivo: MotivoError):
@@ -162,26 +162,37 @@ class ManejadorConexion(socketserver.BaseRequestHandler):
         servidor = self.server
         with servidor.estado.lock:
             sesion = servidor.sesiones[self.request]
+        entrada_abierta = True
         try:
             while not sesion.detener.is_set():
                 servidor.estado.revisar_plazos(sesion)
                 if sesion.detener.is_set():
                     break
-                lectura = [] if sesion.cerrando else [self.request]
+                lectura = [self.request] if entrada_abierta else []
                 escritura = [] if sesion.salida.vacia() else [self.request]
+                if not lectura and not escritura:
+                    break
                 listos, escribibles, _ = select.select(lectura, escritura, [], INTERVALO_ATENCION)
                 servidor.estado.revisar_plazos(sesion)
                 if sesion.detener.is_set():
                     break
                 if escribibles:
                     sesion.salida.enviar(self.request)
-                if listos and not sesion.cerrando:
+                if listos:
                     try:
                         bloque = self.request.recv(512)
                     except (BlockingIOError, InterruptedError):
                         continue
                     if not bloque:
-                        break
+                        if not sesion.cerrando:
+                            break
+                        # El cliente termino de enviar; todavia puede recibir el ERROR pendiente.
+                        entrada_abierta = False
+                        continue
+                    if sesion.cerrando:
+                        # Descartar la entrada pendiente: cerrar con datos sin leer envia RST
+                        # y el cliente podria perder el ERROR todavia en transito.
+                        continue
                     try:
                         for linea in sesion.receptor.agregar(bloque):
                             servidor.estado.procesar(sesion, linea)

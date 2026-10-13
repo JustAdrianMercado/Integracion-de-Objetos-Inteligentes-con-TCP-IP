@@ -116,6 +116,13 @@ class PruebasServidor(unittest.TestCase):
             self.sin_datos(actuador)
             self.post(sensor, actuador, 100, VERDE)
 
+    def test_error_se_entrega_aunque_el_cliente_siga_enviando(self):
+        sensor = self.registrar("sensor")
+        # Datos posteriores al mensaje rechazado, incluido un fin de envio del cliente.
+        sensor.sendall(APAGADO.encode() + b"\n" + b"POST distance=45.00\n" * 50)
+        sensor.shutdown(socket.SHUT_WR)
+        self.error(sensor, "invalid_message")
+
     def test_mensaje_operativo_antes_del_registro(self):
         for mensaje in ("POST distance=45.00", APAGADO):
             cliente = self.conectar()

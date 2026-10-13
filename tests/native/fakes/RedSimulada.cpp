@@ -27,6 +27,7 @@ bool IPAddress::operator==(const IPAddress& otra) const {
 }
 bool WiFiSimulado::mode(int modo) { red.modoWifi = modo; return true; }
 bool WiFiSimulado::setAutoReconnect(bool activo) { red.autoReconnect = activo; return true; }
+bool WiFiSimulado::setSleep(bool activo) { red.wifiSinAhorro = !activo; return true; }
 int WiFiSimulado::status() { return red.wifiConectado ? WL_CONNECTED : WL_DISCONNECTED; }
 int WiFiSimulado::begin(const char*, const char*) { ++red.intentosWifi; return status(); }
 IPAddress WiFiSimulado::localIP() { return IPAddress(192, 168, 1, 20); }
@@ -74,8 +75,10 @@ int recv(int socket, void* datos, std::size_t longitud, int flags) {
     return static_cast<int>(recibidos);
 }
 unsigned long millis() { return red.reloj; }
-void pinMode(uint8_t, uint8_t) {}
-void digitalWrite(uint8_t, uint8_t) {}
+void pinMode(uint8_t pin, uint8_t modo) { if (pin < 40) { red.modosPin[pin] = modo; } }
+void digitalWrite(uint8_t pin, uint8_t valor) {
+    if (pin < 40) { red.niveles[pin] = valor; ++red.escriturasPin; }
+}
 void delayMicroseconds(unsigned int) {}
 unsigned long pulseIn(uint8_t, uint8_t, unsigned long) {
     ++red.mediciones;

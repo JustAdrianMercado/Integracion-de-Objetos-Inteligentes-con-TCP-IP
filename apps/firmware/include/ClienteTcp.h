@@ -17,15 +17,17 @@ public:
     bool puedeEnviar() const;
     // Acepta un POST sin LF ni NUL transmitido. Solo conserva un envio pendiente.
     bool enviar(const char* contenido);
-    // El futuro actuador retira SET completos y validados en orden.
+    // El actuador retira SET completos y validados en orden.
     bool recibir(char* linea, size_t capacidad);
 
 private:
     enum class Estado : uint8_t { Deshabilitado, Desconectado, EsperandoOk, Registrado };
     static constexpr uint32_t INTERVALO_REINTENTO_MS = 2000;
+    // Asociacion WPA2 y DHCP pueden tardar varios segundos: no reiniciar un intento en curso.
+    static constexpr uint32_t PLAZO_ASOCIACION_WIFI_MS = 10000;
     static constexpr uint32_t PLAZO_REGISTRO_MS = 2000;
     static constexpr uint32_t PLAZO_ENVIO_MS = 2000;
-    static constexpr int32_t TIMEOUT_CONEXION_MS = 250;
+    static constexpr int32_t TIMEOUT_CONEXION_MS = 1000;
     static constexpr size_t CAPACIDAD_RECEPCIONES = 4;
 
     TipoCliente tipo_;
@@ -38,6 +40,7 @@ private:
     Estado estado_ = Estado::Deshabilitado;
     bool wifiConectado_ = false;
     uint32_t ultimoIntentoWifi_ = 0;
+    uint32_t esperaWifi_ = 0;
     uint32_t ultimoIntentoTcp_ = 0;
     uint32_t aperturaTcp_ = 0;
     uint32_t inicioEnvio_ = 0;

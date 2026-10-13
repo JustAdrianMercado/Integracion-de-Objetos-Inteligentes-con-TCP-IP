@@ -1,4 +1,4 @@
-#include "ControladorLeds.h"
+#include "ControladorLedsLocal.h"
 
 #include <math.h>
 
@@ -9,7 +9,7 @@ constexpr float LIMITE_AMARILLO_CM = 15.0F;
 constexpr float LIMITE_VERDE_CM = 25.0F;
 }
 
-ControladorLeds::ControladorLeds(
+ControladorLedsLocal::ControladorLedsLocal(
     uint8_t pinVerde, uint8_t pinAmarillo, uint8_t pinRojo)
     : pinVerde_(pinVerde),
       pinAmarillo_(pinAmarillo),
@@ -20,14 +20,14 @@ ControladorLeds::ControladorLeds(
       ultimoCambioMs_(0UL) {
 }
 
-void ControladorLeds::iniciar() {
+void ControladorLedsLocal::iniciar() {
     pinMode(pinVerde_, OUTPUT);
     pinMode(pinAmarillo_, OUTPUT);
     pinMode(pinRojo_, OUTPUT);
     apagarTodos();
 }
 
-void ControladorLeds::establecerDistancia(float distanciaCm) {
+void ControladorLedsLocal::establecerDistancia(float distanciaCm) {
     const RangoDistancia nuevoRango = clasificarDistancia(distanciaCm);
 
     if (nuevoRango == rangoActual_) {
@@ -40,7 +40,7 @@ void ControladorLeds::establecerDistancia(float distanciaCm) {
     apagarTodos();
 }
 
-void ControladorLeds::actualizar(unsigned long tiempoActual) {
+void ControladorLedsLocal::actualizar(unsigned long tiempoActual) {
     if (rangoActual_ == RangoDistancia::Invalido) {
         // Una lectura inválida no debe mantener activo ningún actuador.
         apagarTodos();
@@ -64,11 +64,11 @@ void ControladorLeds::actualizar(unsigned long tiempoActual) {
     }
 }
 
-RangoDistancia ControladorLeds::obtenerRangoActual() const {
+RangoDistancia ControladorLedsLocal::obtenerRangoActual() const {
     return rangoActual_;
 }
 
-RangoDistancia ControladorLeds::clasificarDistancia(float distanciaCm) const {
+RangoDistancia ControladorLedsLocal::clasificarDistancia(float distanciaCm) const {
     if (!isfinite(distanciaCm) || distanciaCm <= 0.0F) {
         return RangoDistancia::Invalido;
     }
@@ -85,7 +85,7 @@ RangoDistancia ControladorLeds::clasificarDistancia(float distanciaCm) const {
     return RangoDistancia::Lejos;
 }
 
-void ControladorLeds::aplicarEstadoLeds() {
+void ControladorLedsLocal::aplicarEstadoLeds() {
     apagarTodos();
 
     if (!ledsEncendidos_) {
@@ -112,7 +112,7 @@ void ControladorLeds::aplicarEstadoLeds() {
     }
 }
 
-void ControladorLeds::apagarTodos() {
+void ControladorLedsLocal::apagarTodos() {
     digitalWrite(pinVerde_, LOW);
     digitalWrite(pinAmarillo_, LOW);
     digitalWrite(pinRojo_, LOW);
