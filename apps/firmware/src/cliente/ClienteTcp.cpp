@@ -36,10 +36,13 @@ void ClienteTcp::iniciar() {
     }
 
     WiFi.mode(WIFI_STA);
+    // Sin ahorro de energia: el modem-sleep retrasa la recepcion de SET y la apertura TCP.
+    WiFi.setSleep(false);
     // El ciclo principal controla todos los reintentos con su propio intervalo.
     WiFi.setAutoReconnect(false);
     const uint32_t ahora = static_cast<uint32_t>(millis());
-    ultimoIntentoWifi_ = ahora - INTERVALO_REINTENTO_MS;
+    ultimoIntentoWifi_ = ahora;
+    esperaWifi_ = 0;
     ultimoIntentoTcp_ = ahora - INTERVALO_REINTENTO_MS;
     estado_ = Estado::Desconectado;
 }
@@ -189,12 +192,14 @@ void ClienteTcp::actualizar() {
         if (wifiConectado_) {
             wifiConectado_ = false;
             ultimoIntentoWifi_ = ahora;
+            esperaWifi_ = INTERVALO_REINTENTO_MS;
             cerrar(ahora, "WiFi desconectado; reintento en 2000 ms.");
         }
-        if (ahora - ultimoIntentoWifi_ >= INTERVALO_REINTENTO_MS) {
+        if (ahora - ultimoIntentoWifi_ >= esperaWifi_) {
             Serial.println("[WiFi] Intentando conectar.");
             WiFi.begin(ssid_, clave_);
             ultimoIntentoWifi_ = static_cast<uint32_t>(millis());
+            esperaWifi_ = PLAZO_ASOCIACION_WIFI_MS;
         }
         return;
     }

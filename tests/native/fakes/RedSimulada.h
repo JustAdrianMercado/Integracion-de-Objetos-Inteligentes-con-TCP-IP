@@ -8,6 +8,7 @@ struct RedSimulada {
     uint32_t reloj = 0;
     bool wifiConectado = false;
     bool autoReconnect = true;
+    bool wifiSinAhorro = false;
     int modoWifi = 0;
     int intentosWifi = 0;
     int intentosTcp = 0;
@@ -33,5 +34,8 @@ struct RedSimulada {
     uint32_t duracionMedicion = 0;
     int mediciones = 0;
     bool perderWifiDuranteEco = false;
+    uint8_t modosPin[40] = {};
+    uint8_t niveles[40] = {};
+    int escriturasPin = 0;
 };
 extern RedSimulada red;

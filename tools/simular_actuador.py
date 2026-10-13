@@ -74,7 +74,11 @@ def main(argv=None) -> int:
         with ActuadorSimulado(args.ip, args.puerto) as actuador:
             print("Actuador registrado. Ctrl+C para terminar.", flush=True)
             while True:
-                comando = actuador.recibir_comando()
+                try:
+                    # Un recv sin plazo no atiende Ctrl+C en Windows hasta recibir datos.
+                    comando = actuador.recibir_comando(0.5)
+                except TimeoutError:
+                    continue
                 print(f"{time.strftime('%H:%M:%S')} | rojo={comando.rojo} "
                       f"amarillo={comando.amarillo} verde={comando.verde}", flush=True)
     except KeyboardInterrupt:

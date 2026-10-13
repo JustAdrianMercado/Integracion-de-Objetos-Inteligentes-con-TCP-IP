@@ -239,7 +239,7 @@ Las firmas representan las interfaces principales previstas. Las salidas de text
 | Dominio compartido | `EstadoLed`, `ComandoLeds` | Representar la actuación sin depender de GPIO o sockets. |
 | Protocolo compartido | `ProtocoloAplicacion`, `TipoCliente` | Traducir entre mensajes de texto y datos C++. |
 
-Los tipos y el protocolo C++ pertenecen al firmware; Python tiene sus equivalentes en `apps/servidor`. Las relaciones del diagrama representan responsabilidades y el contrato, cuya compatibilidad se verifica en `tests/contratos`. `ControlDistancia` C++ permanece como referencia de prueba y la versión Python ejecuta las reglas en la PC. Se conserva `SensorUltrasonico` y se adapta `ControladorLeds`: su futura entrada será un comando de estados, reemplazando la clasificación local que actualmente realiza `establecerDistancia()`.
+Los tipos y el protocolo C++ pertenecen al firmware; Python tiene sus equivalentes en `apps/servidor`. Las relaciones del diagrama representan responsabilidades y el contrato, cuya compatibilidad se verifica en `tests/contratos`. `ControlDistancia` C++ permanece como referencia de prueba y la versión Python ejecuta las reglas en la PC. Se conserva `SensorUltrasonico`. `ControladorLeds` recibe un comando de estados mediante `establecerEstados()`; el controlador original de la Práctica 1, que clasificaba con `establecerDistancia()`, se conserva como `ControladorLedsLocal` solo para el programa local de referencia.
 
 ## 5. Diagramas de secuencia
 
@@ -409,7 +409,9 @@ Los clientes que reciben `ERROR` cierran la conexión y reintentan. El actuador 
 | Plazo de registro | 2000 ms | Cerrar y reintentar si no se completa `REGISTER` / `OK`. |
 | Ausencia de lecturas en el servidor | 2000 ms | Invalidar la lectura, enviar todos apagados y cerrar/liberar el sensor. |
 | Ausencia de comandos en el actuador | 2000 ms | Apagar localmente; mantener el socket si todavía está abierto. |
-| Intervalo entre reintentos | 2000 ms | Reintentar conexión WiFi/TCP cuando el cliente está desconectado. |
+| Intervalo entre reintentos TCP | 2000 ms | Reabrir el socket cuando el cliente está desconectado. |
+| Reintento WiFi | 2000 ms tras la pérdida; luego 10000 ms | No reiniciar una asociación WPA2/DHCP que sigue en curso. |
+| Apertura TCP (`connect`) | 1000 ms | Espera máxima por intento; el plazo de registro empieza al terminar la apertura. |
 
 El servidor mide la ausencia de lecturas desde el último `POST` completo y válido, incluido `distance=invalid`. Si el sensor acaba de registrarse y aún no envió un `POST`, cuenta desde la aceptación de su registro. La antigüedad de la lectura se calcula con el tiempo de recepción de la PC.
 
@@ -448,7 +450,7 @@ Estos casos definen los resultados esperados. Su ejecución y sus evidencias se 
 | PV-12 | Socket abierto sin completar el registro durante 2000 ms. | Cierre por plazo de registro y posterior reintento del cliente. |
 | PV-13 | Sensor deja de enviar; servidor activo. | A los 2000 ms se invalidan los datos, se apagan los LEDs y se libera el rol sensor. |
 | PV-14 | Actuador deja de recibir; desconexión del servidor no detectada todavía. | Apagado local a los 2000 ms sin `SET`. |
-| PV-15 | Desconexión detectada y posterior recuperación. | Apagado, reintentos cada 2000 ms, nuevo registro y restauración mediante un comando válido. |
+| PV-15 | Desconexión detectada y posterior recuperación. | Apagado, reintentos TCP cada 2000 ms (WiFi según §6.5), nuevo registro y restauración mediante un comando válido. |
 | PV-16 | Actuador se conecta con lectura reciente, inválida, antigua o inexistente. | Recibir el último estado reciente o todos apagados, según la sección 6.3. |
 
 ### 7.3 Requerimientos no funcionales previstos

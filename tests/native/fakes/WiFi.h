@@ -20,6 +20,7 @@ class WiFiSimulado {
 public:
     bool mode(int modo);
     bool setAutoReconnect(bool activo);
+    bool setSleep(bool activo);
     int status();
     int begin(const char* ssid, const char* clave);
     IPAddress localIP();

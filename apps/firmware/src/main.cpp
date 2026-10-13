@@ -1,6 +1,6 @@
 #include <Arduino.h>
 
-#include "ControladorLeds.h"
+#include "ControladorLedsLocal.h"
 #include "SensorUltrasonico.h"
 
 namespace {
@@ -13,7 +13,7 @@ constexpr unsigned long INTERVALO_MEDICION_MS = 250UL;
 constexpr unsigned long VELOCIDAD_SERIAL = 115200UL;
 
 SensorUltrasonico sensor(PIN_DISPARO, PIN_ECO);
-ControladorLeds controladorLeds(
+ControladorLedsLocal controladorLeds(
     PIN_LED_VERDE, PIN_LED_AMARILLO, PIN_LED_ROJO);
 
 unsigned long ultimaMedicionMs = 0UL;
