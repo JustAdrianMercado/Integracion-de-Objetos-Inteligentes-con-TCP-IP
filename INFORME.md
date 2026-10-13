@@ -237,68 +237,65 @@ La PC deberá generar el comando `SET` con los estados de los tres LEDs después
 
 ### 2.4 Diagrama de clases
 
-Este apartado representa los componentes existentes en el código y distingue sus responsabilidades de las adaptaciones futuras del [diseño del equipo](docs/diagramas/Diseno_del_sistema.md#4-diagrama-de-clases-propuesto). Se utilizan dos diagramas porque Python y C++ tienen implementaciones independientes del dominio y del protocolo: **el servidor Python no invoca las clases de la biblioteca C++**. Los diagramas seleccionan atributos y operaciones principales; las firmas completas se conservan en los archivos enlazados.
+Este apartado representa la estructura del código vigente, después de la implementación de los dos clientes ESP32 y de la simplificación descrita en el [plan de implementación](docs/PLAN_IMPLEMENTACION.md#simplificación-del-código). Se utilizan dos diagramas porque **Python y C++ tienen implementaciones independientes de sus tipos y del protocolo**: el servidor no invoca la biblioteca C++. La distribución de responsabilidades corresponde a RF1–RF4 de §1.1 y a la arquitectura de §2.1.
+
+Los diagramas seleccionan atributos y operaciones relevantes; las declaraciones completas están en los archivos de la tabla de §2.4.4. El signo `+` identifica miembros públicos y `-` miembros internos; en Python, este último expresa la convención del prefijo `_`, no una restricción de acceso del lenguaje. El sufijo `$` indica una operación estática. Las flechas discontinuas representan dependencias de uso; las continuas, asociaciones; el rombo lleno, composición, y el triángulo vacío, herencia.
 
 #### 2.4.1 Servidor Python
 
-La implementación se organiza en `servidor.py`, `dominio.py` y `protocolo.py`; `__main__.py` contiene las funciones de validación de argumentos y el inicio del servicio. Las clases externas del diagrama pertenecen a la biblioteca estándar y permiten mostrar las dos herencias que declara el código.
+La PC separa el servicio TCP en `servidor.py`, las reglas de control en `dominio.py` y la interpretación del protocolo en `protocolo.py`. Las dos clases externas del diagrama pertenecen a `socketserver`, de la biblioteca estándar.
 
 ```mermaid
 classDiagram
     direction TB
     class ThreadingTCPServer {
-        <<biblioteca_estandar>>
+        <<socketserver>>
     }
     class BaseRequestHandler {
-        <<biblioteca_estandar>>
+        <<socketserver>>
     }
     class ServidorTcp {
         +estado
-        +sesiones
+        +cerrando
+        -_clientes
+        -_lock_clientes
         +server_bind()
-        +process_request(request, client_address)
+        +agregar(cliente: Cliente)
+        +quitar(cliente: Cliente)
+        +clientes_abiertos() int
         +server_close()
     }
     class ManejadorConexion {
+        +cliente
         +handle()
+        +procesar(linea: str)
+        +cerrar_con_error(motivo: MotivoError)
     }
-    class Sesion {
+    class Cliente {
         +conexion
-        +aceptada
-        +ultima_actividad
         +rol
-        +cerrando
-        +detener
-        +salida
-        +receptor
+        -_lock
+        +enviar(linea: str)
+        +cortar()
     }
     class EstadoSistema {
         +lock
         +roles
         +ultimo_comando
         +ultima_lectura
-        +procesar(sesion, linea)
-        +rechazar(sesion, motivo)
-        +liberar(sesion)
-        +revisar_plazos(sesion)
-    }
-    class ColaEnvio {
-        -_mensajes
-        -_desplazamiento
-        -_pendientes
-        -_lock
-        +encolar(linea) bool
-        +vacia() bool
-        +enviar(destino)
+        +registrar(cliente: Cliente, rol: TipoCliente) bool
+        +nueva_lectura(distancia: float)
+        +liberar(cliente: Cliente)
+        -_actuar(comando: ComandoLeds)
     }
     class ControlDistancia {
-        +calcular_comando(distancia_cm) ComandoLeds
+        +calcular_comando(distancia_cm: float) ComandoLeds$
     }
     class ComandoLeds {
-        <<dataclass_inmutable>>
-        +rojo
-        +amarillo
-        +verde
+        <<dataclass>>
+        +EstadoLed rojo
+        +EstadoLed amarillo
+        +EstadoLed verde
     }
     class EstadoLed {
         <<StrEnum>>
@@ -308,14 +305,14 @@ classDiagram
         PARPADEO_4_HZ
     }
     class Mensaje {
-        <<dataclass_inmutable>>
-        +tipo
+        <<dataclass>>
+        +str tipo
         +valor
     }
     class ReceptorLineas {
         -_contenido
         -_rechazado
-        +agregar(bloque)
+        +agregar(bloque: bytes)
     }
     class TipoCliente {
         <<StrEnum>>
@@ -330,37 +327,38 @@ classDiagram
     }
     ThreadingTCPServer <|-- ServidorTcp
     BaseRequestHandler <|-- ManejadorConexion
-    ServidorTcp --> EstadoSistema : estado
-    ServidorTcp --> Sesion : sesiones por socket
-    ServidorTcp ..> ManejadorConexion : manejador de conexiones
-    ManejadorConexion ..> EstadoSistema : procesa y supervisa
-    ManejadorConexion ..> Sesion : atiende la conexion
-    Sesion --> ColaEnvio : salida
-    Sesion --> ReceptorLineas : receptor
-    Sesion --> TipoCliente : rol registrado
-    EstadoSistema --> Sesion : roles reservados
+    ServidorTcp *-- EstadoSistema : crea estado
+    ServidorTcp --> "0..*" Cliente : conexiones abiertas
+    ServidorTcp ..> ManejadorConexion : clase de atencion
+    ManejadorConexion --> Cliente : cliente de la conexion
+    ManejadorConexion ..> ReceptorLineas : instancia local en handle
+    ManejadorConexion ..> EstadoSistema : registra y entrega lecturas
+    ManejadorConexion ..> Mensaje : resultado de leer_mensaje
+    ManejadorConexion ..> MotivoError : rechazo
+    Cliente --> TipoCliente : rol opcional
+    EstadoSistema --> "0..2" Cliente : roles registrados
     EstadoSistema --> ComandoLeds : ultimo_comando
     EstadoSistema ..> ControlDistancia : calcula estados
-    EstadoSistema ..> Mensaje : interpreta el resultado del parser
-    EstadoSistema ..> MotivoError : rechazo
     ControlDistancia ..> ComandoLeds : produce
     ComandoLeds --> EstadoLed : tres valores
-    Mensaje ..> TipoCliente : valor de REGISTER
-    Mensaje ..> ComandoLeds : valor de SET
-    Mensaje ..> MotivoError : valor de ERROR
+    Mensaje --> TipoCliente : posible valor
+    Mensaje --> ComandoLeds : posible valor
+    Mensaje --> MotivoError : posible valor
 ```
 
-`ServidorTcp` hereda de `socketserver.ThreadingTCPServer`, crea `EstadoSistema` y registra una `Sesion` por socket aceptado. `ManejadorConexion`, derivado de `BaseRequestHandler`, ejecuta `handle()` en el contexto de atención de cada conexión: supervisa plazos, recibe bloques, entrega líneas al estado del sistema y atiende la cola de salida. `serve_forever()` y `shutdown()` son operaciones heredadas utilizadas por la entrada de consola; no sustituyen los métodos propios representados.
+`ServidorTcp` hereda de `socketserver.ThreadingTCPServer`, crea un `EstadoSistema` y conserva el conjunto de conexiones abiertas en `_clientes`, protegido por `_lock_clientes`. La biblioteca estándar atiende cada conexión mediante un hilo y una instancia de `ManejadorConexion`, derivada de `BaseRequestHandler`. Este manejador crea un `Cliente` para el socket aceptado y un `ReceptorLineas` local en `handle()`; recibe bloques, procesa líneas completas y libera el rol al finalizar. El receptor no es un atributo de `Cliente`. Las operaciones heredadas, como `serve_forever()`, no se presentan como métodos redefinidos.
 
-Cada `Sesion` conserva el socket, el rol, los tiempos y el evento de detención, y crea su propia `ColaEnvio` y su propio `ReceptorLineas`. `EstadoSistema` administra los roles reservados y el último comando, y almacena en `ultima_lectura` el instante de recepción, no un historial de distancias. Su `RLock` protege el estado compartido. `ColaEnvio` dispone de un bloqueo propio y conserva el desplazamiento de escrituras parciales; el manejador envía bytes fuera del bloqueo global de estado. En el diagrama, el signo `-` de los atributos Python con prefijo `_` expresa su uso interno por convención, no una restricción de acceso impuesta por el lenguaje.
+`Cliente` mantiene el socket en `conexion`, el rol en `rol` y un bloqueo de envío en `_lock`. Su método `enviar()` codifica la línea y utiliza `sendall()`; `cortar()` solicita el cierre mediante `shutdown()`. El bloqueo evita mezclar envíos de distintos hilos hacia un mismo socket. `EstadoSistema` coordina hasta un sensor y un actuador registrados, conserva `ultimo_comando` y almacena en `ultima_lectura` el instante de recepción, no la distancia ni un historial de lecturas.
 
-`ControlDistancia.calcular_comando()` es un método estático que produce una instancia inmutable de `ComandoLeds`. `EstadoLed`, `TipoCliente` y `MotivoError` son enumeraciones `StrEnum`; `Mensaje` y `ComandoLeds` son clases de datos declaradas con `dataclass(frozen=True)`. `Mensaje.tipo` identifica el comando y `valor` contiene el rol, la distancia, el comando de LEDs, el motivo de error o `None`, según corresponda. `ReceptorLineas.agregar()` es un generador: conserva fragmentos y entrega contenido completo sin LF.
+El estado compartido se protege con `threading.Lock`. `registrar()` reserva un rol, `nueva_lectura()` invoca la clasificación y `liberar()` invalida los datos al perder el sensor; `_actuar()` genera y envía el comando al actuador. Los envíos de registro y actuación se realizan con el bloqueo de estado tomado, además del bloqueo propio de `Cliente`. Por ello, un envío lento puede retrasar otras operaciones. El servidor usa sockets bloqueantes con timeout; la diferencia entre este timeout y el plazo desde el último mensaje completo sigue siendo la indicada en §1.3 y §2.1.
 
-La interpretación y construcción del protocolo Python son **funciones de módulo**, no métodos de una clase `ProtocoloAplicacion`: `leer_mensaje()` devuelve `Mensaje`, `crear_comando()` y `crear_error()` construyen contenidos y `codificar()` valida y añade LF. `EstadoSistema.procesar()` utiliza `leer_mensaje()` y el dominio Python; la cola utiliza `codificar()`. Los errores de contenido o delimitación se notifican mediante `MensajeInvalido`, una excepción derivada de `ValueError`, que el manejador traduce a la política de rechazo. Estas funciones y la excepción se documentan en la tabla sin crear clases artificiales para representarlas.
+`ControlDistancia.calcular_comando()` es estático y concentra las reglas de §1.2. `ComandoLeds` y `Mensaje` son `dataclass(frozen=True)`; `EstadoLed`, `TipoCliente` y `MotivoError` son enumeraciones `StrEnum`. El campo `Mensaje.valor` puede contener el rol, la distancia, el comando, el motivo de error o `None`. `ReceptorLineas.agregar()` es un generador que conserva fragmentos y entrega líneas sin LF.
+
+La interpretación y construcción del protocolo son **funciones de módulo**: `ManejadorConexion.procesar()` utiliza `leer_mensaje()`; `EstadoSistema._actuar()` utiliza `crear_comando()`; `cerrar_con_error()` utiliza `crear_error()`, y `Cliente.enviar()` utiliza `codificar()`. Los errores de contenido y delimitación se notifican mediante `MensajeInvalido`, excepción derivada de `ValueError`. Estas funciones y la excepción figuran en la tabla, sin introducir una clase ficticia para agruparlas.
 
 #### 2.4.2 Firmware y biblioteca C++
 
-El firmware existente conserva las clases de hardware de P1. La biblioteca C++ incorpora el dominio de P2, el protocolo y la recepción de líneas, sin depender de sockets. El diagrama siguiente representa ese código; **no incluye `ClienteTcp` ni los programas independientes de sensor y actuador, porque todavía no existen**.
+Las clases de hardware y red pertenecen a `apps/firmware/include/` y `apps/firmware/src/`. Los tipos, el codificador y el receptor comunes a ambos ESP32 se encuentran en `apps/firmware/lib/Compartido/`. La clasificación de distancias se ejecuta exclusivamente en Python.
 
 ```mermaid
 classDiagram
@@ -368,48 +366,58 @@ classDiagram
     class SensorUltrasonico {
         -uint8_t pinDisparo_
         -uint8_t pinEco_
-        +SensorUltrasonico(uint8_t pinDisparo, uint8_t pinEco)
         +iniciar() void
         +medirDistanciaCm() float
     }
-    class ControladorLeds {
-        -uint8_t pinVerde_
-        -uint8_t pinAmarillo_
-        -uint8_t pinRojo_
-        -RangoDistancia rangoActual_
-        -bool ledsEncendidos_
-        -unsigned long ultimoCambioMs_
-        +ControladorLeds(uint8_t pinVerde, uint8_t pinAmarillo, uint8_t pinRojo)
+    class ClienteTcp {
+        -TipoCliente tipo_
+        -Estado estado_
+        -WiFiClient socket_
+        -ReceptorLineas receptor_
+        -uint32_t aperturaTcp_
+        -uint32_t inicioEnvio_
+        -size_t longitudEnvio_
+        -size_t enviados_
+        -bool hayComando_
         +iniciar() void
-        +establecerDistancia(float distanciaCm) void
-        +actualizar(unsigned long tiempoActual) void
-        +obtenerRangoActual() RangoDistancia
-        -clasificarDistancia(float distanciaCm) RangoDistancia
-        -aplicarEstadoLeds() void
-        -apagarTodos() void
+        +actualizar() void
+        +estaRegistrado() bool
+        +puedeEnviar() bool
+        +enviar(const char* contenido) bool
+        +recibir(char* linea, size_t capacidad) bool
     }
-    class RangoDistancia {
+    class Estado {
         <<enumeration>>
-        Invalido
-        Rojo
-        Amarillo
-        Verde
-        Lejos
+        Deshabilitado
+        Desconectado
+        EsperandoOk
+        Registrado
     }
-    class ControlDistancia {
-        +calcularComando(float distanciaCm) ComandoLeds
+    class ControladorLeds {
+        -Led rojo_
+        -Led amarillo_
+        -Led verde_
+        -ComandoLeds comandoActual_
+        +iniciar() void
+        +establecerEstados(const ComandoLeds& comando) void
+        +actualizar(unsigned long tiempoActual) void
+        +apagarTodos() void
+        +comandoActual() const ComandoLeds&
+    }
+    class Led {
+        <<struct>>
+        +uint8_t pin
+        +EstadoLed estado
+        +bool encendido
+        +bool pendiente
+        +uint32_t ultimoCambioMs
     }
     class ProtocoloAplicacion {
-        +crearRegistro(TipoCliente tipo, char* salida, std::size_t capacidad) bool
-        +crearLectura(float distanciaCm, char* salida, std::size_t capacidad) bool
-        +crearComando(const ComandoLeds& comando, char* salida, std::size_t capacidad) bool
-        +crearOk(char* salida, std::size_t capacidad) bool
-        +crearError(MotivoError motivo, char* salida, std::size_t capacidad) bool
-        +leerRegistro(const char* linea, TipoCliente& tipo) bool
-        +leerLectura(const char* linea, float& distanciaCm) bool
-        +leerComando(const char* linea, ComandoLeds& comando) bool
-        +leerOk(const char* linea) bool
-        +leerError(const char* linea, MotivoError& motivo) bool
+        +std::size_t LongitudMaximaContenido$
+        +std::size_t CapacidadBuffer$
+        +crearRegistro(TipoCliente tipo, char* salida, std::size_t capacidad) bool$
+        +crearLectura(float distanciaCm, char* salida, std::size_t capacidad) bool$
+        +leerComando(const char* linea, ComandoLeds& comando) bool$
     }
     class ReceptorLineas {
         -std::size_t longitud_
@@ -443,55 +451,66 @@ classDiagram
         Sensor
         Actuador
     }
-    class MotivoError {
-        <<enumeration>>
-        MensajeInvalido
-        NoRegistrado
-        RolOcupado
-    }
-    ControladorLeds --> RangoDistancia : clasificacion local P1
-    ControlDistancia ..> ComandoLeds : produce
+    ClienteTcp --> Estado : tipo interno de estado_
+    ClienteTcp --> TipoCliente : rol de la placa
+    ClienteTcp *-- ReceptorLineas : receptor_ por valor
+    ClienteTcp ..> ProtocoloAplicacion : registro y mensajes
+    ControladorLeds *-- "3" Led : rojo amarillo verde
+    ControladorLeds *-- ComandoLeds : comandoActual_ por valor
+    Led --> EstadoLed : modo
     ComandoLeds --> EstadoLed : tres valores
-    ProtocoloAplicacion ..> ComandoLeds : codifica e interpreta
-    ProtocoloAplicacion ..> TipoCliente : registro
-    ProtocoloAplicacion ..> MotivoError : errores
+    ProtocoloAplicacion ..> TipoCliente : crea registro
+    ProtocoloAplicacion ..> ComandoLeds : interpreta SET
     ReceptorLineas ..> ProtocoloAplicacion : constantes de capacidad
     ReceptorLineas ..> ResultadoRecepcion : resultado por byte
+    note for Estado "Enum privado ClienteTcp::Estado"
+    note for Led "Struct privado ControladorLeds::Led"
+    note for SensorUltrasonico "Utilizada por PrincipalSensor.cpp"
+    note for ClienteTcp "Una instancia en cada programa ESP32"
 ```
 
-`SensorUltrasonico` encapsula TRIG y ECHO y proporciona la adquisición heredada. `ControladorLeds` recibe una distancia mediante `establecerDistancia()`, la clasifica en `RangoDistancia` y controla los GPIO. Su `apagarTodos()` es privado; no tiene `establecerEstados()` ni `comandoActual_`, y no depende de `ComandoLeds`. Mantiene los límites de 5, 15 y 25 cm y la alternancia de 150 ms de P1. El programa local `main.cpp` coordina sensor y controlador, pero es un conjunto de funciones Arduino, no una clase adicional.
+`SensorUltrasonico` encapsula los GPIO de TRIG y ECHO y convierte la duración del eco en centímetros. `ClienteTcp` encapsula la conexión `WiFiClient`, el rol, el estado de registro, los buffers y los temporizadores de conexión y envío. Su enumeración privada `ClienteTcp::Estado` se muestra como `Estado` en el diagrama. `actualizar()` atiende comunicación y reconexión; `enviar()` admite un `POST` del sensor registrado, y `recibir()` entrega al actuador el último `SET` completo pendiente. El cliente conserva un solo envío pendiente y el comando más reciente, sin una cola de estados anteriores.
 
-`ControlDistancia` C++ sí aplica los límites de 50 y 100 cm y devuelve `ComandoLeds`; permanece como referencia de prueba, no como clasificador ejecutado por el servidor Python. `ComandoLeds` inicializa los tres valores en `EstadoLed::Apagado`. `TipoCliente`, `MotivoError`, `EstadoLed` y `ResultadoRecepcion` son enumeraciones con tipo subyacente `std::uint8_t`; `RangoDistancia` es la enumeración propia del firmware heredado.
+`ControladorLeds` recibe `ComandoLeds` mediante `establecerEstados()` y guarda una copia en `comandoActual_`. Contiene por valor tres instancias de su estructura privada `ControladorLeds::Led`, representada como `Led`: cada una mantiene pin, modo, nivel de salida, cambio pendiente y tiempo de alternancia. Los campos de la estructura son públicos, aunque el tipo está declarado en la parte privada del controlador. `actualizar()` aplica los cambios y mantiene los parpadeos; un modo repetido conserva su fase. `apagarTodos()` es público y apaga inmediatamente; `comandoActual()` devuelve una referencia constante al comando almacenado. El controlador no recibe distancias ni realiza clasificación local.
 
-Todas las operaciones de `ProtocoloAplicacion` son estáticas y devuelven `bool`. Las operaciones de construcción reciben la capacidad real del buffer; las de interpretación mantienen sus parámetros de salida sin cambios si fallan. `ReceptorLineas` usa un buffer fijo de 128 bytes y devuelve `ResultadoRecepcion` por byte. Debe consumirse `linea()` después de `LineaCompleta` y antes del siguiente byte; `reiniciar()` descarta fragmentos y errores para una conexión nueva. El diagrama omite algunos atributos auxiliares para conservar legibilidad; `calcularComando()`, `obtenerRangoActual()`, `clasificarDistancia()` y `linea()` están declarados `const` en las cabeceras.
+`Tipos.h` declara únicamente `EstadoLed`, `ComandoLeds` y `TipoCliente`; el comando comienza con los tres estados apagados. `ResultadoRecepcion` se declara en `ReceptorLineas.h`. Estas enumeraciones y `ClienteTcp::Estado` tienen tipo subyacente de 8 bits. `ProtocoloAplicacion` conserva tres operaciones estáticas: `crearRegistro()`, `crearLectura()` y `leerComando()`. Las dos primeras escriben contenido sin LF en un buffer con capacidad explícita; la tercera valida los tres estados antes de modificar el comando de salida. Sus constantes públicas `static constexpr` fijan 127 bytes de contenido y 128 bytes de buffer. `ClienteTcp` añade LF al transmitir.
 
-#### 2.4.3 Responsabilidades, archivos y estado
+`ReceptorLineas` forma parte de `ClienteTcp` por valor, reconstruye líneas en un buffer fijo y notifica el resultado por byte. `linea()` debe consultarse tras `LineaCompleta` y antes de agregar otro byte; `reiniciar()` descarta fragmentos y errores. `estaRegistrado()`, `puedeEnviar()`, `comandoActual()` y `linea()` están declarados `const`; las firmas del diagrama omiten ese calificador final y los constructores para facilitar la lectura. También se omiten miembros auxiliares, como las credenciales, los arrays de envío y recepción y los métodos internos de transporte; sus declaraciones permanecen en las cabeceras enlazadas.
 
-| Componente | Lenguaje | Archivo o módulo | Responsabilidad | Estado de implementación |
+#### 2.4.3 Programas principales y entornos
+
+[PrincipalSensor.cpp](apps/firmware/src/PrincipalSensor.cpp) y [PrincipalActuador.cpp](apps/firmware/src/PrincipalActuador.cpp) contienen las funciones `setup()` y `loop()` del framework Arduino; **no declaran clases con esos nombres**. Cada archivo crea una instancia de `ClienteTcp` con su rol y coordina las clases de hardware que necesita.
+
+En el sensor, `setup()` inicializa `SensorUltrasonico` y el cliente. `loop()` atiende la red y, tras el registro y con disponibilidad de envío, adquiere una lectura cuando corresponde al intervalo nominal de 250 ms. Después utiliza `crearLectura()` y `ClienteTcp.enviar()`; no clasifica distancias ni conserva un historial para enviarlo tras reconectar.
+
+En el actuador, `setup()` inicializa `ControladorLeds` con salidas apagadas y el cliente. `loop()` atiende la red, obtiene el último comando disponible, lo interpreta con `leerComando()` y entrega el resultado a `establecerEstados()`. El mismo ciclo llama a `actualizar()` para los LEDs y supervisa el apagado ante pérdida de registro o ausencia de comandos, conforme a §1.2.
+
+[platformio.ini](platformio.ini) selecciona archivos distintos para evitar incorporar ambos pares de `setup()` y `loop()` en un mismo firmware. El entorno `sensor`, predeterminado, incluye `PrincipalSensor.cpp`, `ClienteTcp.cpp` y `SensorUltrasonico.cpp` para `esp32doit-devkit-v1`; `actuador` incluye `PrincipalActuador.cpp`, `ClienteTcp.cpp` y `ControladorLeds.cpp` para `esp32dev`. Ambos comparten la implementación de `ClienteTcp`, la biblioteca `Compartido` y el esquema de configuración de red; cada placa mantiene sus propias instancias y su propio estado en ejecución.
+
+#### 2.4.4 Responsabilidades, archivos y estado
+
+| Componente o tipo | Lenguaje | Archivo real | Responsabilidad | Estado de implementación |
 |---|---|---|---|---|
-| `ServidorTcp` | Python | [servidor.py](apps/servidor/servidor.py) | Configurar y administrar el servicio TCP y las sesiones. | Implementado en código; integración física pendiente. |
-| `ManejadorConexion` | Python | [servidor.py](apps/servidor/servidor.py) | Atender recepción, envíos, errores y plazos de cada conexión. | Implementado en código. |
-| `Sesion` | Python | [servidor.py](apps/servidor/servidor.py) | Conservar socket, rol, tiempos, receptor y cola por conexión. | Implementado en código. |
-| `EstadoSistema` | Python | [servidor.py](apps/servidor/servidor.py) | Reservar/liberar roles, clasificar lecturas y coordinar comandos. | Implementado en código. |
-| `ColaEnvio` | Python | [servidor.py](apps/servidor/servidor.py) | Encolar mensajes y conservar el progreso de escrituras parciales. | Implementado en código. |
-| `ControlDistancia`, `ComandoLeds`, `EstadoLed` | Python | [dominio.py](apps/servidor/dominio.py) | Ejecutar la clasificación y representar los estados de actuación. | Implementados en código; actuación física pendiente. |
-| `Mensaje`, `ReceptorLineas`, `TipoCliente`, `MotivoError` | Python | [protocolo.py](apps/servidor/protocolo.py) | Representar mensajes, delimitar líneas y definir roles y errores. | Implementados en código. |
-| `leer_mensaje`, `crear_comando`, `crear_error`, `codificar`, `MensajeInvalido` | Python | [protocolo.py](apps/servidor/protocolo.py) | Interpretar/codificar mediante funciones de módulo y notificar errores mediante una excepción. | Implementados en código. |
-| `main`, `puerto_valido`, `ipv4_valida` | Python | [__main__.py](apps/servidor/__main__.py) | Validar argumentos e iniciar y detener el servicio. | Funciones implementadas en código. |
-| `SensorUltrasonico` | C++ | [SensorUltrasonico.h](apps/firmware/include/SensorUltrasonico.h), [implementación](apps/firmware/src/SensorUltrasonico.cpp) | Adquirir distancias con el HC-SR04. | Heredado de P1; integración con el cliente pendiente. |
-| `ControladorLeds`, `RangoDistancia` | C++ | [ControladorLeds.h](apps/firmware/include/ControladorLeds.h), [implementación](apps/firmware/src/ControladorLeds.cpp) | Clasificar y actuar localmente en el programa P1. | Heredados; adaptación a comandos P2 pendiente. |
-| `ControlDistancia` | C++ | [ControlDistancia.h](packages/Compartido/src/ControlDistancia.h), [implementación](packages/Compartido/src/ControlDistancia.cpp) | Aplicar las reglas P2 como referencia de prueba. | Implementado; no invocado por Python. |
-| `ProtocoloAplicacion` | C++ | [ProtocoloAplicacion.h](packages/Compartido/src/ProtocoloAplicacion.h), [implementación](packages/Compartido/src/ProtocoloAplicacion.cpp) | Construir e interpretar los cinco mensajes de aplicación. | Implementado; uso por clientes pendiente. |
-| `ReceptorLineas`, `ResultadoRecepcion` | C++ | [ReceptorLineas.h](packages/Compartido/src/ReceptorLineas.h), [implementación](packages/Compartido/src/ReceptorLineas.cpp) | Reconstruir líneas y comunicar el resultado de recepción por byte. | Implementados; adaptador TCP pendiente. |
-| `EstadoLed`, `ComandoLeds`, `TipoCliente`, `MotivoError` | C++ | [EstadoLed.h](packages/Compartido/src/EstadoLed.h), [ComandoLeds.h](packages/Compartido/src/ComandoLeds.h), [TipoCliente.h](packages/Compartido/src/TipoCliente.h), [MotivoError.h](packages/Compartido/src/MotivoError.h) | Representar modos, comandos, roles y errores. | Tipos implementados. |
+| `ServidorTcp` | Python | [servidor.py](apps/servidor/servidor.py) | Administrar el servicio, el estado y las conexiones abiertas; heredar la atención por hilos de `socketserver`. | Implementado; integración física: [PENDIENTE DE EVIDENCIA]. |
+| `ManejadorConexion` | Python | [servidor.py](apps/servidor/servidor.py) | Reconstruir y procesar líneas por conexión, gestionar errores y liberar el rol al finalizar. | Implementado. |
+| `Cliente` | Python | [servidor.py](apps/servidor/servidor.py) | Encapsular socket y rol, serializar envíos con un bloqueo y solicitar el cierre. | Implementado. |
+| `EstadoSistema` | Python | [servidor.py](apps/servidor/servidor.py) | Coordinar roles, antigüedad de lectura, clasificación y comandos con estado protegido. | Implementado; revisión de plazos conforme a §1.3 pendiente. |
+| `ControlDistancia`, `ComandoLeds`, `EstadoLed` | Python | [dominio.py](apps/servidor/dominio.py) | Clasificar en la PC y representar estados sin depender de GPIO ni sockets. | Implementados. |
+| `Mensaje`, `ReceptorLineas`, `TipoCliente`, `MotivoError` | Python | [protocolo.py](apps/servidor/protocolo.py) | Representar mensajes, delimitar líneas y definir roles y motivos de rechazo. | Implementados. |
+| `leer_mensaje`, `crear_comando`, `crear_error`, `codificar`; `MensajeInvalido` | Python | [protocolo.py](apps/servidor/protocolo.py) | Interpretar y construir mensajes con funciones de módulo; notificar errores con una excepción. | Implementados. |
+| Entrada de consola: `main`, `puerto_valido`, `ipv4_valida`, `ipv4_locales` | Python | [__main__.py](apps/servidor/__main__.py) | Validar argumentos, iniciar el servicio, mostrar direcciones locales y configurar registros. | Funciones implementadas. |
+| `ClienteTcp`, `ClienteTcp::Estado` | C++ | [ClienteTcp.h](apps/firmware/include/ClienteTcp.h), [implementación](apps/firmware/src/ClienteTcp.cpp) | Gestionar WiFi/TCP, registro, mensajes y reconexión de cada objeto. | Implementados; WiFi real: [PENDIENTE DE EVIDENCIA]. |
+| `SensorUltrasonico` | C++ | [SensorUltrasonico.h](apps/firmware/include/SensorUltrasonico.h), [implementación](apps/firmware/src/SensorUltrasonico.cpp) | Adquirir distancia con el HC-SR04 e identificar ausencia de eco. | Implementado; exactitud física: [PENDIENTE DE MEDICIÓN]. |
+| `ControladorLeds`, `ControladorLeds::Led` | C++ | [ControladorLeds.h](apps/firmware/include/ControladorLeds.h), [implementación](apps/firmware/src/ControladorLeds.cpp) | Ejecutar estados, conservar la fase y mantener la temporización y el apagado de LEDs. | Implementados; actuación física: [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA]. |
+| `ProtocoloAplicacion` | C++ | [ProtocoloAplicacion.h](apps/firmware/lib/Compartido/ProtocoloAplicacion.h), [implementación](apps/firmware/lib/Compartido/ProtocoloAplicacion.cpp) | Crear registro y lectura e interpretar comandos completos. | Implementado y utilizado por ambos programas. |
+| `ReceptorLineas`, `ResultadoRecepcion` | C++ | [ReceptorLineas.h](apps/firmware/lib/Compartido/ReceptorLineas.h), [implementación](apps/firmware/lib/Compartido/ReceptorLineas.cpp) | Reconstruir mensajes y comunicar el resultado por byte al cliente. | Implementados y utilizados por `ClienteTcp`. |
+| `EstadoLed`, `ComandoLeds`, `TipoCliente` | C++ | [Tipos.h](apps/firmware/lib/Compartido/Tipos.h) | Representar modos de LED, comandos y roles comunes al firmware. | Tipos implementados. |
+| Programa sensor: `setup`, `loop` | C++ | [PrincipalSensor.cpp](apps/firmware/src/PrincipalSensor.cpp) | Coordinar adquisición y publicación; utilizar el rol sensor. | Implementado; recorrido físico: [PENDIENTE DE EVIDENCIA]. |
+| Programa actuador: `setup`, `loop` | C++ | [PrincipalActuador.cpp](apps/firmware/src/PrincipalActuador.cpp) | Coordinar recepción, ejecución y supervisión local; utilizar el rol actuador. | Implementado; recorrido físico: [PENDIENTE DE EVIDENCIA]. |
 
-La adquisición y la actuación física permanecen encapsuladas en las clases de hardware C++. La comunicación y la administración de sesiones del lado PC corresponden a `ServidorTcp`, `ManejadorConexion`, `Sesion`, `EstadoSistema` y `ColaEnvio`; la interpretación del protocolo Python se mantiene en funciones de módulo y su receptor. El dominio Python clasifica sin depender de GPIO, y los componentes C++ de protocolo y dominio no administran sockets. Esta separación permite revisar cada responsabilidad y comparar el contrato entre lenguajes sin confundir sus implementaciones.
+La organización mantiene la adquisición y la actuación encapsuladas en C++, la clasificación en el dominio Python y los adaptadores de red separados de las reglas de control. Los tipos con nombres equivalentes en ambos lenguajes son definiciones distintas relacionadas por el protocolo. Esta estructura aporta elementos verificables para la revisión de modularidad y orientación a objetos de RNF5, sin declarar aprobada su revisión integral.
 
-Para completar el diseño objetivo se requiere `ClienteTcp`, los programas principales independientes de ambos ESP32 y la adaptación de `ControladorLeds` para ejecutar conjuntamente los estados recibidos. Se conservan como decisiones futuras del diseño y del [plan de implementación](docs/PLAN_IMPLEMENTACION.md), sin representarlos como clases existentes.
-
-**Clientes ESP32, adaptación del actuador y correspondencia con las interfaces finales:** [PENDIENTE DE IMPLEMENTACIÓN]
-
-**Validación de la integración de los componentes y evidencias de ejecución:** [PENDIENTE DE EVIDENCIA]
+**Integración con las dos placas, mediciones físicas y evidencias de ejecución:** [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA]
 
 ### 2.5 Diagramas de secuencia
 
