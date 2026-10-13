@@ -26,18 +26,24 @@ Diseñar, implementar y validar un sistema distribuido que mida distancias con u
 
 ## 1. Requerimientos Funcionales y No Funcionales
 
+Esta sección establece las condiciones que deberá satisfacer el sistema distribuido. Los requerimientos funcionales RF1–RF4 mantienen la numeración y el alcance de la [consigna oficial](docs/consigna/Práctica_2.md); los criterios de aceptación concretan las decisiones del [diseño del equipo](docs/diagramas/Diseno_del_sistema.md). Los requerimientos no funcionales RNF1–RNF5 declaran los atributos de calidad y sus métodos de verificación.
+
+La adquisición y el envío de distancia corresponden al ESP32 sensor; la recepción, clasificación y generación de comandos corresponden al servidor TCP en la PC; la recepción y ejecución de esos comandos corresponden al ESP32 actuador. Esta distribución sitúa el algoritmo de control en el servidor, conforme a la consigna. Las clases citadas representan responsabilidades previstas y deberán contrastarse con el código final.
+
 ### 1.1 Requerimientos funcionales y criterios de aceptación
 
-Los identificadores RF1–RF4 corresponden a la consigna. Los criterios concretos se basan en el diseño propuesto.
+| ID | Funcionalidad requerida | Criterio de aceptación | Componente responsable según el diseño | Estado de implementación |
+|---|---|---|---|---|
+| RF1 | Medir la distancia entre el sensor ultrasónico HC-SR04 y un objeto. | Obtener lecturas finitas positivas expresadas en centímetros y contrastarlas con una referencia física mediante PN-02. Ante timeout de ECHO o valor no válido, identificar la lectura como inválida, según PV-04; la tolerancia de medición se evalúa en RNF2. | ESP32 sensor: `SensorUltrasonico` y programa principal de adquisición. | [PENDIENTE DE IMPLEMENTACIÓN] |
+| RF2 | Interpretar cada distancia válida y clasificarla en tres rangos contiguos y sin solapamiento. | Asignar cada distancia finita positiva a exactamente un rango de §1.2. Las entradas de PV-01 a PV-03, incluidos 49.99, 50, 99.99 y 100 cm, deben producir la clasificación prevista y el comando correspondiente. | Servidor TCP en PC: `ControlDistancia`, coordinado por `ServidorTcp`. | [PENDIENTE DE IMPLEMENTACIÓN] |
+| RF3 | Activar los tres LEDs del objeto actuador en función del rango, con un comportamiento distinto por rango. | Aplicar el comando completo según §1.2: rojo a 4 Hz, amarillo a 2 Hz o verde fijo, con los demás LEDs apagados; una lectura inválida debe producir todos apagados. Verificar estos estados mediante PV-01 a PV-04 y la continuidad de fase ante comandos idénticos mediante PV-05. | Servidor TCP: generación de `ComandoLeds`; ESP32 actuador: recepción y ejecución mediante `ControladorLeds`. | [PENDIENTE DE IMPLEMENTACIÓN] |
+| RF4 | Enviar lecturas desde el objeto sensor al servidor y comandos desde el servidor al objeto actuador mediante sockets TCP sobre WiFi (IEEE 802.11), utilizando un protocolo de aplicación definido por el grupo. | Establecer una conexión de cada ESP32 hacia la PC, completar `REGISTER` / `OK` y comprobar con registros el recorrido integrado `POST` → clasificación en servidor → `SET` → actuación física. Los mensajes deben respetar la especificación de §2.6; PV-06 a PV-16 verificarán registro, delimitación, rechazo de errores y recuperación previstos. | ESP32 sensor y actuador: `ClienteTcp` y sus programas principales; PC: `ServidorTcp`; codificación e interpretación: `ProtocoloAplicacion`. | [PENDIENTE DE IMPLEMENTACIÓN] |
 
-| ID | Requerimiento | Criterio de aceptación previsto | Estado |
-|---|---|---|---|
-| RF1 | Medir la distancia entre el sensor ultrasónico y un objeto. | Obtener lecturas en centímetros y contrastarlas con una referencia física; comunicar lecturas inválidas explícitamente. | [PENDIENTE DE IMPLEMENTACIÓN] |
-| RF2 | Clasificar la distancia en al menos tres rangos contiguos y sin solapamiento. | Clasificar en la PC toda lectura válida según los límites de 50 y 100 cm de §1.2. | [PENDIENTE DE IMPLEMENTACIÓN] |
-| RF3 | Activar los actuadores con un comportamiento distinto por rango. | Aplicar los modos de §1.2, apagar los LEDs no seleccionados y conservar la fase ante comandos idénticos. | [PENDIENTE DE IMPLEMENTACIÓN] |
-| RF4 | Intercambiar lecturas y comandos mediante sockets TCP sobre WiFi con un protocolo definido. | Registrar ambos clientes y comprobar el flujo sensor → `POST` → servidor → `SET` → actuador, conforme al protocolo propuesto. | [PENDIENTE DE IMPLEMENTACIÓN] |
+Los criterios se relacionan con el diseño y las validaciones mediante la matriz de §2.7. Las pruebas con entradas controladas al servidor permitirán verificar los límites exactos de RF2 sin confundirlos con el error físico del sensor; las pruebas del recorrido integrado comprobarán conjuntamente adquisición, comunicación y actuación. La revisión del código final y las evidencias de §4 serán necesarias para declarar el cumplimiento de cada requisito.
 
 ### 1.2 Rangos y lógica de control propuestos
+
+Para la clasificación, se considera válida una distancia finita mayor que cero, expresada en centímetros. El servidor deberá aplicar la siguiente lógica y generar un comando con los estados de los tres LEDs:
 
 | Distancia recibida | LED rojo | LED amarillo | LED verde |
 |---|---|---|---|
@@ -46,17 +52,35 @@ Los identificadores RF1–RF4 corresponden a la consigna. Los criterios concreto
 | 50 ≤ distancia < 100 cm | Apagado | Parpadeo a 2 Hz | Apagado |
 | distancia ≥ 100 cm | Apagado | Apagado | Encendido fijo |
 
-Los valores 50 y 100 cm pertenecen al intervalo que comienza en ese valor. El intervalo de trabajo previsto para la validación física es de 3 a 150 cm; su cobertura queda `[PENDIENTE DE MEDICIÓN]`.
+Los intervalos válidos son `(0, 50)`, `[50, 100)` y `[100, +∞)`. El valor 50 cm pertenece únicamente al rango amarillo y 100 cm únicamente al verde: cada límite se excluye del intervalo anterior y se incluye en el siguiente. De esta forma, no existen huecos ni solapamientos para las distancias finitas positivas. La lectura inválida constituye un estado de tratamiento de error, no un cuarto rango de distancia.
+
+En el protocolo, `off` representa apagado y `on` encendido fijo. `blink_4` representa cuatro ciclos completos por segundo: un período de 250 ms, con 125 ms encendido y 125 ms apagado. `blink_2` representa dos ciclos completos por segundo: un período de 500 ms, con 250 ms encendido y 250 ms apagado. Estas frecuencias describen ciclos completos, no el número de alternancias del GPIO. Al comenzar un modo de parpadeo, el LED deberá encenderse; si se recibe de nuevo el mismo modo, deberá conservar su fase y temporización para que el envío periódico de comandos no reinicie el patrón.
+
+Un timeout de ECHO, una lectura no finita o una distancia menor o igual que cero deberán normalizarse en el objeto sensor como `POST distance=invalid`. El servidor deberá interpretar ese mensaje como una lectura inválida y enviar `SET` con los tres estados `off`. El token `invalid` es válido dentro del protocolo; un mensaje mal formado o una distancia numérica cero o negativa recibida directamente se rechazarán conforme a sus reglas. Esta distinción evita tratar un fallo de comunicación como una medición válida.
+
+El diseño también prevé el apagado al iniciar el actuador, ante una desconexión detectada y tras 2000 ms de ausencia de lecturas en el servidor o de comandos en el actuador, según corresponda. El registro de roles, el rechazo de mensajes y la reconexión son comportamientos complementarios de RF3 y RF4, especificados en §2.6 y cubiertos por PV-06 a PV-16; no se incorporan como requerimientos funcionales adicionales.
+
+El dominio de clasificación no impone un límite superior de 150 cm ni excluye valores positivos inferiores a 3 cm. En cambio, **3 a 150 cm es el intervalo previsto para validar físicamente la exactitud** de RNF2. La cobertura lógica de los rangos no demuestra que el sensor cumpla la tolerancia fuera de ese intervalo ni que ya la cumpla dentro de él. Su cobertura experimental y sus resultados permanecen `[PENDIENTE DE MEDICIÓN]` y `[PENDIENTE DE EVIDENCIA]`.
 
 ### 1.3 Requerimientos no funcionales
 
-| ID | Atributo | Criterio declarado según el diseño | Verificación prevista | Estado |
-|---|---|---|---|---|
-| RNF1 | Estabilidad | ≥ 10 minutos continuos sin reinicios ni bloqueos. | Observación y registro de eventos de los tres equipos. | [PENDIENTE DE MEDICIÓN] |
-| RNF2 | Exactitud | Error absoluto máximo ≤ 3 cm dentro de 3 a 150 cm. | Comparación con regla o cinta métrica que cubra los tres rangos. | [PENDIENTE DE MEDICIÓN] |
-| RNF3 | Tiempo de respuesta | Cambio visible del actuador en ≤ 1 s desde el cambio de distancia. | Medición extremo a extremo con grabación o instrumento de tiempo común. | [PENDIENTE DE MEDICIÓN] |
-| RNF4 | Frecuencia de muestreo | ≥ 2 lecturas/s; intervalo nominal previsto de 250 ms. | Conteo de lecturas y de `POST` recibidos durante una ventana de tiempo. | [PENDIENTE DE MEDICIÓN] |
-| RNF5 | Calidad del código | C++ legible, modular, orientado a objetos, documentado y conforme a sus convenciones. | Revisión de responsabilidades, nombres, comentarios y dependencias. | [PENDIENTE DE IMPLEMENTACIÓN] |
+Los cuatro atributos cuantitativos adoptan los valores de referencia de la consigna como objetivos del equipo. RNF5 concreta la exigencia de código legible, modular, orientado a objetos y documentado mediante una revisión verificable. Su alcance incluye ambos firmwares y el servidor.
+
+| ID | Atributo de calidad | Criterio de aceptación | Método de verificación | Componente o alcance afectado | Estado de validación |
+|---|---|---|---|---|---|
+| RNF1 | Estabilidad | Operar durante al menos 10 minutos continuos, con cero reinicios y cero bloqueos, manteniendo la adquisición, el intercambio TCP y la respuesta de los LEDs. | PN-01: registrar inicio, fin y eventos de los tres equipos; observar continuidad de lecturas y actuación, y documentar cualquier interrupción. | Sistema distribuido completo: ESP32 sensor, servidor TCP y ESP32 actuador. | [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA] |
+| RNF2 | Exactitud de medición | Mantener un error absoluto máximo ≤ 3 cm respecto de una referencia física dentro del intervalo previsto de 3 a 150 cm. | PN-02: comparar lecturas individuales con una regla o cinta métrica en posiciones que cubran los tres rangos y los extremos del intervalo; calcular el valor absoluto de cada diferencia y su máximo. Registrar referencias, repeticiones y condiciones del ensayo. | HC-SR04, circuito y adquisición del ESP32 sensor; comprobar la conservación del valor comunicado al servidor. | [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA] |
+| RNF3 | Tiempo de respuesta extremo a extremo | Reflejar cada cambio de rango ensayado en el estado visible del actuador en un tiempo máximo de 1 s desde el cambio físico de distancia. | PN-03: registrar el cambio físico y la actuación con una grabación o instrumento de tiempo común; calcular la diferencia temporal por ensayo y el máximo observado, indicando resolución y transiciones evaluadas. | Recorrido completo sensor → servidor → actuador, incluidos adquisición, red, procesamiento y ejecución del comando. | [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA] |
+| RNF4 | Frecuencia de muestreo | Obtener al menos 2 lecturas/s durante la operación registrada del sensor. | PN-04: contar lecturas obtenidas durante una ventana de duración conocida y calcular cantidad/duración; contabilizar por separado lecturas inválidas y `POST` recibidos en el servidor para contrastar adquisición y recepción. | Planificación de adquisición en ESP32 sensor; recepción en servidor como comprobación del envío. | [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA] |
+| RNF5 | Calidad del código | Presentar módulos con responsabilidades delimitadas, clases que encapsulen estado y operaciones, interfaces documentadas, nombres y convenciones de C++ consistentes, y reglas de control separadas del hardware y los sockets. | Revisión de §3.4 sobre una versión identificada del código final: inspeccionar módulos, clases, interfaces y dependencias; registrar por criterio el cumplimiento, el archivo o fragmento que lo respalda y los ajustes pendientes. | Código de ambos ESP32, servidor y módulos compartidos de dominio y protocolo. | [PENDIENTE DE IMPLEMENTACIÓN] / [PENDIENTE DE EVIDENCIA] |
+
+Para RNF2, la aceptación se basará en el **máximo de los errores absolutos individuales**, no únicamente en el promedio; este último podría ocultar lecturas que excedan la tolerancia. Las lecturas inválidas se registrarán por separado y no se usarán como errores numéricos. La conclusión experimental deberá indicar las posiciones realmente ensayadas y sus condiciones, sin generalizar a distancias no probadas.
+
+Para RNF3, el origen temporal será el cambio físico de distancia y el final el cambio visible correspondiente del LED. Así se incluirá la espera hasta la siguiente adquisición y todo el recorrido de comunicación y control. No se restarán directamente timestamps de relojes de equipos distintos sin una referencia temporal común. El análisis de temporización del diseño podrá apoyar la explicación, pero no sustituirá la medición extremo a extremo exigida por la consigna.
+
+La revisión de RNF5 deberá comprobar, en particular, que el sensor adquiere y comunica, el servidor clasifica y produce comandos, y el actuador ejecuta los estados recibidos. También verificará la encapsulación de pines y conexiones, la coherencia entre declaraciones y uso de interfaces, constantes con nombres descriptivos y comentarios que expliquen unidades, temporización y tratamiento de errores. El registro de revisión permitirá justificar cada criterio mediante enlaces al código y distinguir los hallazgos de los ajustes efectivamente realizados.
+
+Los **valores objetivo** son los límites de aceptación de la tabla. Los **parámetros de configuración previstos** incluyen el intervalo de adquisición y envío de 250 ms, el timeout de ECHO de 30000 µs y los plazos de registro, ausencia de datos y reintento de 2000 ms. El intervalo nominal de 250 ms equivale teóricamente a 4 lecturas/s, pero no demuestra la frecuencia obtenida ni el tiempo de respuesta del sistema completo. Los **resultados medidos** se incorporarán en §4 y §5, con su versión de software y evidencias; en esta iteración permanecen pendientes. La revisión de implementación también permanece pendiente y los resultados de la Práctica 1 no acreditan estos requisitos de la Práctica 2.
 
 ## 2. Análisis y Diseño
 
