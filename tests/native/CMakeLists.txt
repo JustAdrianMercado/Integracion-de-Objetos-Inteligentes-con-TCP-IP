@@ -1,39 +1,46 @@
-add_executable(pruebas_control_distancia control_distancia.cpp)
-target_link_libraries(pruebas_control_distancia PRIVATE Compartido)
+set(FIRMWARE "${PROJECT_SOURCE_DIR}/apps/firmware")
 
-add_test(NAME control_distancia COMMAND pruebas_control_distancia)
-
-add_executable(pruebas_protocolo_aplicacion protocolo_aplicacion.cpp)
-target_link_libraries(pruebas_protocolo_aplicacion PRIVATE Compartido)
-add_test(NAME protocolo_aplicacion COMMAND pruebas_protocolo_aplicacion)
-
-add_executable(pruebas_receptor_lineas receptor_lineas.cpp)
-target_link_libraries(pruebas_receptor_lineas PRIVATE Compartido)
-add_test(NAME receptor_lineas COMMAND pruebas_receptor_lineas)
-
-add_executable(verificar_contrato verificar_contrato.cpp)
-target_link_libraries(verificar_contrato PRIVATE Compartido)
-
-add_executable(pruebas_sensor_ultrasonico
-    sensor_ultrasonico.cpp
-    "${PROJECT_SOURCE_DIR}/apps/firmware/src/SensorUltrasonico.cpp"
+# Biblioteca compartida por ambos ESP32: tipos, protocolo y receptor de lineas.
+add_library(Compartido STATIC
+    "${FIRMWARE}/lib/Compartido/ProtocoloAplicacion.cpp"
+    "${FIRMWARE}/lib/Compartido/ReceptorLineas.cpp"
 )
-target_include_directories(pruebas_sensor_ultrasonico PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/fakes"
-    "${PROJECT_SOURCE_DIR}/apps/firmware/include"
+target_include_directories(Compartido PUBLIC "${FIRMWARE}/lib/Compartido")
+
+# Codigo del firmware compilado contra los fakes de Arduino, WiFi y sockets.
+add_library(firmware_simulado STATIC
+    fakes/RedSimulada.cpp
+    "${FIRMWARE}/src/ClienteTcp.cpp"
+    "${FIRMWARE}/src/ControladorLeds.cpp"
+    "${FIRMWARE}/src/SensorUltrasonico.cpp"
 )
-add_test(NAME sensor_ultrasonico COMMAND pruebas_sensor_ultrasonico)
+target_include_directories(firmware_simulado PUBLIC fakes "${FIRMWARE}/include")
+target_link_libraries(firmware_simulado PUBLIC Compartido)
+
+# Cada principal define setup() y loop(), por eso se compila en su propio ejecutable.
+function(prueba_principal nombre principal)
+    add_executable(pruebas_${nombre} ${nombre}.cpp "${FIRMWARE}/src/${principal}")
+    target_include_directories(pruebas_${nombre} BEFORE PRIVATE fakes/configuracion)
+    target_link_libraries(pruebas_${nombre} PRIVATE firmware_simulado)
+    add_test(NAME ${nombre} COMMAND pruebas_${nombre})
+endfunction()
+
+foreach(prueba protocolo_aplicacion receptor_lineas cliente_tcp controlador_leds)
+    add_executable(pruebas_${prueba} ${prueba}.cpp)
+    target_link_libraries(pruebas_${prueba} PRIVATE firmware_simulado)
+    add_test(NAME ${prueba} COMMAND pruebas_${prueba})
+endforeach()
+
+prueba_principal(principal_sensor PrincipalSensor.cpp)
+prueba_principal(principal_actuador PrincipalActuador.cpp)
 
 find_package(Python3 3.13 QUIET COMPONENTS Interpreter)
 if(Python3_FOUND)
     add_test(NAME servidor_python
         COMMAND "${Python3_EXECUTABLE}" -m unittest discover -s tests/python -v
-    )
-    set_tests_properties(servidor_python PROPERTIES
         WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
-        ENVIRONMENT "IOT_CONTRACT_EXE=$<TARGET_FILE:verificar_contrato>"
-        TIMEOUT 90
     )
+    set_tests_properties(servidor_python PROPERTIES TIMEOUT 90)
 else()
     message(STATUS "Python 3.13 no encontrado; ejecutar unittest con Python 3.13 por separado.")
 endif()

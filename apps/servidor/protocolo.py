@@ -1,15 +1,13 @@
-"""El mismo contrato ASCII/LF que packages/Compartido, sin dependencias externas."""
+"""Protocolo ASCII/LF del sistema; el firmware usa el mismo contrato (apps/firmware/lib/Compartido)."""
 
 from dataclasses import dataclass
 from enum import StrEnum
 import math
 import re
-import struct
 
 from .dominio import ComandoLeds, EstadoLed
 
 MAX_CONTENIDO = 127
-MAX_FLOAT32 = struct.unpack("!f", bytes.fromhex("7f7fffff"))[0]
 
 
 class MensajeInvalido(ValueError):
@@ -50,12 +48,8 @@ def leer_mensaje(linea: str) -> Mensaje:
         if re.fullmatch(r"[0-9]+(?:\.[0-9]+)?", texto) is None:
             raise MensajeInvalido("Decimal no valido")
         valor = float(texto)
-        if not math.isfinite(valor) or not 0 < valor <= MAX_FLOAT32:
-            raise MensajeInvalido("Distancia fuera del dominio float32")
-        # Los clientes C++ representan las distancias con float de 32 bits.
-        valor = struct.unpack("!f", struct.pack("!f", valor))[0]
-        if valor <= 0:
-            raise MensajeInvalido("Distancia no representable")
+        if not math.isfinite(valor) or valor <= 0:
+            raise MensajeInvalido("La distancia debe ser positiva")
         return Mensaje("POST", valor)
     patron = r"SET redLed=(off|on|blink_2|blink_4) yellowLed=(off|on|blink_2|blink_4) greenLed=(off|on|blink_2|blink_4)"
     estados = re.fullmatch(patron, linea)

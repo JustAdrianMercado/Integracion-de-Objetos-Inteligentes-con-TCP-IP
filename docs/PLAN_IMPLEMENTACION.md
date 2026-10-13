@@ -1,5 +1,7 @@
 # Plan de implementación revisado
 
+> Las secciones de las etapas 1 a 6 describen la estructura de su momento. La estructura vigente está en [Simplificación del código](#simplificación-del-código).
+
 ## Arquitectura y responsables
 
 El sistema mantiene dos ESP32 clientes y una PC servidor. Los ESP32 usan C++ con Arduino-ESP32 2.0.17 y PlatformIO Core 6.2.0. La PC usa Python 3.13 y biblioteca estándar. El monorepo y el contrato ASCII/TCP se conservan.
@@ -21,11 +23,11 @@ El protocolo C++ no necesita un refactor para hablar con Python. Las nuevas prue
 
 `SensorUltrasonico` se conserva y se verifica con GPIO simulados. El `ControladorLeds` actual pertenece al programa local de la Práctica 1: su clasificación se reemplazará por estados recibidos al desarrollar el actuador, en la etapa 6.
 
-## Entrega actual: fix de arquitectura
+## Fix de arquitectura — fusionado
 
-Rama: `fix/reorganize-architecture`. Commit propuesto: `fix: reorganize architecture`.
+Rama: `fix/reorganize-architecture`. Commit: `fix: reorganize architecture`, fusionado en `main` antes de iniciar la etapa 5.
 
-Esta entrega incluye:
+Esta entrega incluyó:
 
 1. Servidor Python modular con `socketserver`, hilos de conexión, roles protegidos y logging.
 2. Retirada del servidor C++ y de su dependencia Winsock en la construcción.
@@ -34,11 +36,11 @@ Esta entrega incluye:
 5. Versiones fijadas de la plataforma y el framework ESP32, con filtro explícito para el programa de referencia.
 6. README y diseño actualizados; este plan define la siguiente entrega.
 
-El firmware local continúa compilando en `esp32doit-devkit-v1`. Los entornos de los dos clientes se habilitan cuando existan sus programas, en las etapas 5 y 6. La implementación del cliente sensor queda pendiente después de este fix.
+El firmware local continúa compilando en `esp32doit-devkit-v1`. Este fix dejó la base preparada para implementar los dos clientes en las etapas 5 y 6.
 
 ## Etapa 5 — Cliente ESP32 sensor
 
-**Rama prevista:** `ft/sensor-client`.
+**Rama:** `ft/sensor-client`. **Estado:** fusionada en `main` mediante el PR #5 (commit `ft: implement ESP32 sensor client`).
 
 **Objetivo:** el ESP32 de 30 pines con HC-SR04 se conecta por WiFi al servidor Python, completa su registro y envía una lectura cada 250 ms. Un actuador simulado en la PC permite verificar los comandos antes de implementar el segundo ESP32.
 
@@ -56,7 +58,7 @@ El firmware local continúa compilando en `esp32doit-devkit-v1`. Los entornos de
 
 Los encabezados de hardware y los tipos de `packages/Compartido` se reutilizan. `WiFi.h` y `WiFiClient.h` los proporciona el framework Arduino-ESP32 fijado en PlatformIO.
 
-### Orden de implementación
+### Trabajo implementado
 
 1. Añadir la configuración de red de ejemplo y la exclusión del archivo local.
 2. Implementar `ClienteTcp` con estados de conexión y registro. WiFi y TCP se atienden desde `actualizar`; las conexiones tienen un tiempo de espera acotado.
@@ -72,13 +74,17 @@ Los encabezados de hardware y los tipos de `packages/Compartido` se reutilizan. 
 - Mantener TRIG de 10 µs, timeout de ECHO de 30000 µs y, como base, GPIO 5 para TRIG y 18 para ECHO.
 - Conservar el progreso de las escrituras parciales y los fragmentos de entrada. Transmitir un LF por mensaje y ningún terminador C.
 - Ante `ERROR`, respuesta no permitida, registro vencido o desconexión, cerrar la conexión y reiniciar sus buffers y estado.
-- Reintentar WiFi/TCP cada 2000 ms. Usar `millis()` y resta sin signo para los temporizadores, con un ciclo principal sin esperas repetitivas que detengan la atención del cliente.
+- Reintentar TCP cada 2000 ms; WiFi, 2000 ms después de una pérdida y luego cada 10000 ms para no reiniciar una asociación en curso (ajuste de la etapa 6). Usar `millis()` y resta sin signo para los temporizadores, con un ciclo principal sin esperas repetitivas que detengan la atención del cliente.
 - Tras reconectar, repetir el registro y publicar lecturas nuevas. El sensor no acumula un historial de mensajes durante la desconexión.
 - La clasificación de rangos se ejecuta en Python; el programa sensor se dedica a medición y transporte.
 
-### Filtros previstos
+El cliente conserva un solo envío pendiente y el principal omite nuevas mediciones mientras esté ocupado. Un envío atascado durante 2000 ms cierra la conexión. La apertura TCP espera como máximo 1000 ms por intento (250 ms antes de la auditoría de la etapa 6); el plazo de registro comienza al terminar esa apertura. `send` y `recv` usan `MSG_DONTWAIT` sobre el descriptor de `WiFiClient` para atender escrituras y recepción sin esperas internas.
 
-Las opciones comunes de plataforma, framework y velocidad de monitor se heredan de `[env]`. Al implementar los archivos anteriores se añadirá:
+La configuración vacía permite compilar sin credenciales, pero deshabilita los intentos y muestra por consola cómo completar el archivo local. La [guía del firmware](../apps/firmware/README.md) describe configuración, carga y uso del simulador.
+
+### Filtros implementados
+
+Las opciones comunes de plataforma, framework y velocidad de monitor se heredan de `[env]`. `sensor` es el entorno predeterminado y tiene este filtro:
 
 ```ini
 [env:sensor]
@@ -102,23 +108,86 @@ Los filtros se interpretan respecto de `apps/firmware/src`. Al excluir primero t
 6. Los mensajes fragmentados y las escrituras parciales se manejan completos; no se publica antes de `OK`.
 7. Las suites Python y C++ continúan aprobadas. Las verificaciones que requieren placa se distinguen de las simuladas.
 
-**Fin de etapa:** entregar los cambios sin commit ni push y esperar la revisión y publicación manual antes de iniciar el actuador.
+### Validación de la entrega
+
+- Compilación del entorno `sensor` y del programa local `esp32doit-devkit-v1` aprobadas con Arduino-ESP32 2.0.17.
+- Pruebas nativas del adaptador y del mismo principal sensor con WiFi, reloj y GPIO simulados: registro antes de publicar, intervalo de 250 ms, fragmentos, envíos parciales, errores, plazos, reintentos, descarte de datos anteriores y desbordamiento de `millis()`.
+- Flujo automatizado del firmware C++ → servidor Python por TCP real → actuador simulado, incluyendo los tres rangos, lectura inválida, reinicio del servidor y pérdida/recuperación de WiFi simulada.
+- La asociación a una red WiFi real, medidas físicas y recuperación observable por consola serie quedan pendientes de probar en la placa con su configuración local. La integración y el montaje completo se verifican en la etapa 7.
+
+**Fin de etapa:** publicada y fusionada antes de iniciar el actuador.
 
 ## Etapa 6 — Cliente ESP32 actuador
 
-Rama prevista: `ft/actuator-client`.
+**Rama:** `ft/actuator-client`. **Estado:** implementada para revisión. Incluye las correcciones de la auditoría del 13 de octubre de 2026.
 
-Crear `cliente/PrincipalActuador.cpp` y adaptar `ControladorLeds` para recibir `ComandoLeds`, reutilizando `ClienteTcp`. El programa clasificador local de la Práctica 1 sigue como referencia en su propio entorno.
+**Objetivo:** el ESP32 genérico de 38 pines se registra como actuador, recibe los `SET` del servidor Python y aplica conjuntamente los estados de los tres LEDs, sin clasificar distancias.
 
-El entorno `actuador` usará el perfil `esp32dev` para la placa genérica de 38 pines y un filtro que incluya solamente su principal, `ClienteTcp.cpp` y el controlador de LEDs. Ambos entornos compartirán la plataforma y el framework fijados.
+### Archivos y responsabilidades
 
-El actuador aplicará conjuntamente los tres estados recibidos. `blink_2` alternará cada 250 ms y `blink_4` cada 125 ms. Los comandos idénticos conservarán la fase. Una desconexión o un `SET` inválido apagará inmediatamente; 2000 ms sin `SET` completo también apagarán las salidas, manteniendo la conexión si sigue abierta.
+| Archivo | Responsabilidad |
+|---|---|
+| `apps/firmware/src/cliente/PrincipalActuador.cpp` | `setup` y `loop` del actuador: registro, consumo de `SET`, plazo de 2000 ms y apagados. |
+| `apps/firmware/src/cliente/ControladorLeds.cpp` | Estados `off`, `on`, `blink_2` y `blink_4` sobre GPIO 25/26/27, sin bloqueo. |
+| `apps/firmware/include/ControladorLeds.h` | Interfaz del diagrama de clases: `establecerEstados`, `actualizar` y `apagarTodos`. |
+| `apps/firmware/src/ControladorLedsLocal.cpp` | Controlador original de la Práctica 1, renombrado y usado solo por `main.cpp`. |
+| `tools/simular_sensor.py` | Cliente Python que publica distancias para probar la placa actuadora sin sensor. |
 
-Ampliar las pruebas C++ con GPIO y reloj simulados para estados, frecuencias, ausencia de actuación parcial, watchdog y desbordamiento de `millis()`. Validar con el servidor Python y un sensor simulado antes de pasar a ambas placas.
+### Reglas del actuador
+
+- Inicializar los GPIO como salidas apagadas. Solo actuar tras `OK` y un `SET` completo validado por `ClienteTcp` y `leerComando`.
+- Aplicar los tres estados juntos. `blink_2` alterna cada 250 ms y `blink_4` cada 125 ms; un parpadeo nuevo empieza encendido. Un `SET` idéntico conserva la fase.
+- Apagar inmediatamente ante desconexión, `ERROR` o `SET` inválido (`ClienteTcp` cierra la conexión). Con 2000 ms sin `SET` completo, apagar y mantener la conexión; un `SET` posterior reactiva las salidas.
+- Reiniciar el plazo al registrarse y con cada comando válido. Temporizadores `uint32_t` con resta sin signo; tras una espera larga el parpadeo se resincroniza en lugar de encadenar alternancias.
+
+### Correcciones de la auditoría incluidas
+
+1. `ClienteTcp` desactiva el modem-sleep (`WiFi.setSleep(false)`), deja 10000 ms a cada asociación WiFi antes de repetir `WiFi.begin` y acota `connect` a 1000 ms.
+2. El servidor sigue leyendo y descartando la entrada mientras entrega un `ERROR`, para no cerrar con datos sin leer (RST); usa argumentos de formato en el logging y, al escuchar en `0.0.0.0`, muestra las IPv4 de la PC.
+3. `simular_actuador` responde a `Ctrl+C` en Windows aunque no lleguen comandos.
+
+### Filtro del entorno
+
+```ini
+[env:actuador]
+board = esp32dev
+build_src_filter =
+    -<*>
+    +<cliente/PrincipalActuador.cpp>
+    +<cliente/ClienteTcp.cpp>
+    +<cliente/ControladorLeds.cpp>
+```
+
+### Validación de la entrega
+
+- Compilación de `sensor`, `actuador` y `esp32doit-devkit-v1` aprobada con Arduino-ESP32 2.0.17.
+- Pruebas nativas `controlador_leds` y `principal_actuador` con GPIO y reloj simulados: los cuatro estados, ambas frecuencias, fase ante comandos idénticos, aplicación conjunta, fragmentos, plazo de 2000 ms, desconexión, `SET` inválido, recuperación y desbordamiento de `millis()`.
+- Flujo automatizado sensor Python → servidor Python por TCP real → firmware C++ del actuador, con los tres rangos, `invalid`, desconexión del sensor y plazo sin comandos.
+- La asociación WiFi real, el parpadeo visible y el tiempo de respuesta físico se verifican con las placas en la etapa 7.
+
+## Simplificación del código
+
+**Rama:** `refactor/simplify-code`, sobre la etapa 6. **Objetivo:** un proyecto más pequeño y explicable en la defensa, con el mismo comportamiento (protocolo, rangos, parpadeos, plazos y roles).
+
+| Cambio | Motivo |
+|---|---|
+| Se eliminaron el programa local de la Práctica 1 (`main.cpp`, `ControladorLedsLocal`) y su entorno. | No forma parte de la Práctica 2; sigue en el historial de Git. |
+| Se eliminó `ControlDistancia` C++. | Las reglas se ejecutan solo en el servidor Python (`dominio.py`). |
+| Se eliminaron el contrato de 127 vectores, `verificar_contrato` y los puentes firmware↔Python. | Capa de pruebas avanzada difícil de explicar; cada lado conserva sus propias pruebas. |
+| `packages/Compartido` pasó a `apps/firmware/lib/Compartido`; `EstadoLed.h`, `ComandoLeds.h` y `TipoCliente.h` se unieron en `Tipos.h`; se quitó `MotivoError.h`. | Todo el firmware queda bajo `apps/firmware`. |
+| `src/cliente/` pasó a `src/`. | Menos niveles de carpetas. |
+| `ProtocoloAplicacion` conserva solo `crearRegistro`, `crearLectura` y `leerComando`. | Son las únicas funciones que usan los ESP32. |
+| `ClienteTcp` guarda solo el último `SET` en lugar de una cola de cuatro. | El actuador solo necesita el estado más reciente. |
+| El servidor Python usa sockets bloqueantes con plazo de 2 s y `sendall`, sin `select`, colas de envío parcial ni límites de conexiones/bytes. | De 254 a 201 líneas, con un flujo lineal por conexión. |
+| El servidor ya no convierte las distancias a float32. | El sensor envía dos decimales; los límites 50.00 y 100.00 se clasifican igual. |
+
+**Simplificación consciente:** el plazo de 2 s del servidor se renueva con cualquier dato recibido, no solo con líneas completas.
+
+**Validación:** `sensor` y `actuador` compilan; 7/7 suites CTest aprobadas (6 nativas y `servidor_python`, 26 pruebas).
 
 ## Etapa 7 — Integración física y pruebas
 
-Rama prevista: `ft/system-integration`.
+Rama prevista: `ft/system-integration`. **Estado:** en curso. Documentos: [guía de montaje](GUIA_MONTAJE.md) y [pruebas físicas](PRUEBAS_FISICAS.md); el servidor acepta `--registro` y `tools/analizar_registro.py` resume el registro para PN-01 y PN-04.
 
 Entregar la guía de conexión para las placas reales: pines, HC-SR04, divisor de ECHO, resistencias de LEDs, alimentación, GND, cables USB de datos, puertos COM, carga de cada entorno, WiFi e IP de la PC.
 

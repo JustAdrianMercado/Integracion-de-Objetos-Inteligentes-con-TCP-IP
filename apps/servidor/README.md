@@ -1,16 +1,10 @@
 # Servidor TCP Python
 
-Servidor Python 3.13 con biblioteca estándar: `socketserver`, `threading`, `logging`, `argparse` y módulos auxiliares. Mantiene el contrato de aplicación validado en C++, con un sensor y un actuador registrados simultáneamente.
+Python 3.13 con biblioteca estándar. Acepta un sensor y un actuador, clasifica cada distancia recibida y envía el comando de LEDs al actuador.
 
 ## Ejecutar
 
-Desde la raíz del monorepo:
-
-```powershell
-py -3.13 -m apps.servidor --ip 127.0.0.1 --puerto 5000
-```
-
-Para escuchar en las interfaces IPv4 de la PC:
+Desde la raíz del repositorio:
 
 ```powershell
 py -3.13 -m apps.servidor --ip 0.0.0.0 --puerto 5000
@@ -18,40 +12,40 @@ py -3.13 -m apps.servidor --ip 0.0.0.0 --puerto 5000
 
 | Opción | Predeterminado | Uso |
 |---|---|---|
-| `--ip` | `0.0.0.0` | Dirección IPv4 local donde escuchar. |
-| `--puerto` | `5000` | Puerto entre 0 y 65535; 0 selecciona uno libre para pruebas. |
-| `--help` | — | Ayuda de argparse. |
+| `--ip` | `0.0.0.0` | IPv4 local donde escuchar; `127.0.0.1` para pruebas en la misma PC. |
+| `--puerto` | `5000` | Puerto TCP; `0` elige uno libre. |
+| `--registro` | — | Archivo donde guardar también el registro, como evidencia; `tools.analizar_registro` lo resume. |
 
-Los ESP32 usarán la IPv4 real de la PC y el puerto efectivo. La consola registra conexiones aceptadas por rol, lecturas, comandos y cierres por ausencia de datos. `Ctrl+C` cierra el servicio, los sockets y los hilos de conexión.
+Con `0.0.0.0` la consola muestra las IPv4 de la PC para configurar `IP_SERVIDOR` en los ESP32. También registra registros, lecturas, comandos, errores y cierres. `Ctrl+C` cierra el servidor y sus conexiones.
 
-## Responsabilidades
+## Módulos
 
-| Módulo | Responsabilidad |
+| Módulo | Contenido |
 |---|---|
-| `__main__.py` | Argumentos, logging, inicio y cierre de consola. |
-| `servidor.py` | Servidor, sesiones, roles, caducidad, recepción y envíos parciales. |
-| `dominio.py` | `EstadoLed`, `ComandoLeds` y `ControlDistancia` de Python. |
-| `protocolo.py` | Interpretación estricta de mensajes, codificación y delimitación LF. |
+| `__main__.py` | Argumentos, logging, inicio y cierre. |
+| `servidor.py` | `ServidorTcp` (un hilo por conexión), `ManejadorConexion`, `Cliente` y `EstadoSistema` (roles y última lectura). |
+| `protocolo.py` | `leer_mensaje`, `crear_comando`, `crear_error`, `codificar` y `ReceptorLineas`. |
+| `dominio.py` | `EstadoLed`, `ComandoLeds` y `ControlDistancia`: las reglas de rango. |
 
-`ServidorTcp` deriva de [`socketserver.ThreadingTCPServer`](https://docs.python.org/3.13/library/socketserver.html). Cada conexión tiene un hilo, un receptor de líneas y una cola de salida. `EstadoSistema` protege los roles y la última lectura mediante un `threading.RLock`. Los envíos se hacen con sockets no bloqueantes y una cola con progreso parcial; no se hace I/O de red manteniendo el bloqueo de estado.
+## Funcionamiento
 
-La cola tiene su propio bloqueo para que un `SET` generado en el hilo del sensor no se mezcle con los bytes enviados por el hilo del actuador. La reserva de un rol y la secuencia `OK` → `SET` se realizan bajo el bloqueo de estado. Dos registros simultáneos del mismo rol producen un solo ganador.
+- Cada conexión tiene su hilo, que lee del socket con un plazo de 2 s y separa líneas terminadas en LF.
+- `EstadoSistema` guarda qué cliente tiene cada rol y la última lectura, protegido por un `threading.Lock`. Cada `Cliente` tiene además su propio lock de envío para que dos hilos no mezclen líneas.
+- `REGISTER` reserva el rol y responde `OK`. Al registrar el actuador se le envía el estado actual si la última lectura tiene menos de 2 s; si no, todos apagados.
+- Cada `POST` del sensor genera un `SET` para el actuador, aunque sea igual al anterior. `distance=invalid` apaga los LEDs.
+- **Plazos:** sin datos durante 2 s antes de registrarse → `ERROR reason=not_registered`; un sensor sin datos durante 2 s se cierra y se apagan los LEDs. El actuador puede estar en silencio indefinidamente.
+- La desconexión o el rechazo del sensor apaga los LEDs. La desconexión del actuador conserva la lectura para su siguiente registro.
+- Si el envío al actuador falla o queda bloqueado más de 2 s, se cierra su conexión y se libera el rol.
 
-## Políticas conservadas
+## Errores
 
-- `REGISTER` debe completarse dentro de 2000 ms; se responde `OK` al reservar el rol.
-- Ambos órdenes de registro funcionan. El actuador recibe la última lectura si tiene menos de 2000 ms, o todos apagados.
-- Cada `POST` del sensor genera `SET`, incluso si coincide con el anterior. `invalid` es una lectura válida del protocolo que apaga los LEDs y renueva el plazo.
-- La desconexión o el rechazo del sensor invalida su lectura y envía todos apagados. Un sensor sin un `POST` completo durante 2000 ms se cierra y libera su rol.
-- La desconexión del actuador conserva la lectura reciente del sensor para el siguiente registro.
-- Un rol ocupado genera `role_busy`; un mensaje operativo válido antes del registro, `not_registered`; una sintaxis inválida, un segundo registro o un comando incompatible con el rol, `invalid_message`.
-- Un `ERROR` se conserva en la cola antes de cerrar la conexión; el cierre se fuerza si no termina de enviarse dentro de 2000 ms.
-- El límite es 127 bytes de contenido más LF. Se rechazan CR, NUL, controles y bytes fuera del ASCII imprimible.
-- Se admiten hasta 8 conexiones y 4096 bytes pendientes por conexión. Las conexiones que superan esos límites se cierran.
+| Situación | Respuesta |
+|---|---|
+| Rol ya ocupado | `ERROR reason=role_busy`; el cliente existente no se modifica. |
+| `POST` o `SET` antes de registrarse, o registro no completado en 2 s | `ERROR reason=not_registered` |
+| Sintaxis inválida, línea de más de 127 bytes, CR/NUL, segundo registro o mensaje que no corresponde al rol | `ERROR reason=invalid_message` |
 
-La regla en ejecución pertenece a `dominio.py`: rojo a 4 Hz para menos de 50 cm, amarillo a 2 Hz desde 50 y antes de 100 cm, verde fijo desde 100 cm. El firmware del actuador implementará los parpadeos.
-
-Las distancias recibidas se convierten a float32 antes de clasificarlas, para conservar el comportamiento de los clientes C++ en valores muy próximos a los límites. Las pruebas de contrato comparan ambas implementaciones, sin enlazar C++ con Python.
+Tras un `ERROR` la conexión se cierra. Antes de cerrar, el servidor lee lo que el cliente siga enviando: cerrar con datos sin leer enviaría un RST y el cliente podría perder el `ERROR`.
 
 ## Pruebas
 
@@ -59,6 +53,4 @@ Las distancias recibidas se convierten a float32 antes de clasificarlas, para co
 py -3.13 -m unittest discover -s tests/python -v
 ```
 
-Ejecutan sockets reales en la propia PC, recepción fragmentada, roles ocupados y simultáneos, recuperación, datos inválidos, plazos y cierre de los hilos. También simulan escrituras parciales y sockets temporalmente ocupados. La comparación con C++ se ejecuta cuando está construido `verificar_contrato`; CTest proporciona su ruta automáticamente.
-
-El servidor utiliza solamente la biblioteca estándar. CMake se usa para las pruebas nativas del firmware y del contrato, y el informe académico se trabaja por separado.
+`test_servidor.py` usa sockets reales en `127.0.0.1` con los plazos reales de 2 s: rangos y límites, orden de registro, lecturas recientes, roles ocupados, mensajes inválidos, fragmentos, plazos, desconexiones y cierre del servidor.

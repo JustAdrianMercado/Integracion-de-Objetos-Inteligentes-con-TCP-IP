@@ -1,8 +1,6 @@
-"""Un hilo por conexion; roles y lectura protegidos, I/O fuera del bloqueo global."""
+"""Servidor TCP: un hilo por conexion, un sensor y un actuador, reglas de distancia en la PC."""
 
-from collections import deque
 import logging
-import select
 import socket
 import socketserver
 import threading
@@ -15,229 +13,189 @@ from .protocolo import (
 )
 
 LOG = logging.getLogger(__name__)
-PLAZO_REGISTRO = 2.0
-PLAZO_LECTURAS = 2.0
-PLAZO_CIERRE = 2.0
-MAX_CONEXIONES = 8
-MAX_SALIDA = 4096
-INTERVALO_ATENCION = 0.02
+# Plazo de registro, de ausencia de POST, de antiguedad de la ultima lectura y de envio.
+PLAZO = 2.0
 
 
-class ColaEnvio:
-    def __init__(self):
-        self._mensajes = deque()
-        self._desplazamiento = 0
-        self._pendientes = 0
-        self._lock = threading.Lock()
+class Cliente:
+    """Una conexion aceptada. El lock evita mezclar lineas enviadas desde dos hilos."""
 
-    def encolar(self, linea: str) -> bool:
-        mensaje = codificar(linea)
-        with self._lock:
-            if self._pendientes + len(mensaje) > MAX_SALIDA:
-                return False
-            self._mensajes.append(mensaje)
-            self._pendientes += len(mensaje)
-            return True
-
-    def vacia(self) -> bool:
-        with self._lock:
-            return not self._mensajes
-
-    def enviar(self, destino) -> None:
-        with self._lock:
-            presupuesto = MAX_SALIDA
-            while self._mensajes and presupuesto:
-                fragmento = self._mensajes[0][self._desplazamiento:]
-                try:
-                    cantidad = destino.send(fragmento[:presupuesto])
-                except (BlockingIOError, InterruptedError):
-                    return
-                if cantidad == 0:
-                    raise ConnectionError("Envio sin progreso")
-                self._desplazamiento += cantidad
-                self._pendientes -= cantidad
-                presupuesto -= cantidad
-                if self._desplazamiento == len(self._mensajes[0]):
-                    self._mensajes.popleft()
-                    self._desplazamiento = 0
-
-
-class Sesion:
     def __init__(self, conexion: socket.socket):
         self.conexion = conexion
-        self.aceptada = time.monotonic()
-        self.ultima_actividad = self.aceptada
         self.rol = None
-        self.cerrando = False
-        self.inicio_cierre = 0.0
-        self.detener = threading.Event()
-        self.salida = ColaEnvio()
-        self.receptor = ReceptorLineas()
+        self._lock = threading.Lock()
+
+    def enviar(self, linea: str):
+        with self._lock:
+            self.conexion.sendall(codificar(linea))
+
+    def cortar(self):
+        try:
+            self.conexion.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
 
 
 class EstadoSistema:
+    """Roles registrados y ultima lectura, compartidos por todos los hilos."""
+
     def __init__(self):
-        self.lock = threading.RLock()
+        self.lock = threading.Lock()
         self.roles = {}
         self.ultimo_comando = ComandoLeds()
         self.ultima_lectura = None
 
-    def _encolar(self, sesion: Sesion, contenido: str):
-        if not sesion.salida.encolar(contenido):
-            LOG.warning("Salida saturada; cerrando conexion")
-            sesion.detener.set()
-            self.liberar(sesion)
-
-    def _actuar(self, comando: ComandoLeds):
-        actuador = self.roles.get(TipoCliente.ACTUADOR)
-        if actuador is not None:
-            linea = crear_comando(comando)
-            self._encolar(actuador, linea)
-            LOG.info(linea)
-
-    def procesar(self, sesion: Sesion, linea: str):
-        mensaje = leer_mensaje(linea)
+    def registrar(self, cliente: Cliente, rol: TipoCliente) -> bool:
         with self.lock:
-            ahora = time.monotonic()
-            if sesion.rol is None:
-                if mensaje.tipo != "REGISTER":
-                    motivo = (MotivoError.NO_REGISTRADO if mensaje.tipo in ("POST", "SET")
-                              else MotivoError.MENSAJE_INVALIDO)
-                    self.rechazar(sesion, motivo)
-                elif mensaje.valor in self.roles:
-                    self.rechazar(sesion, MotivoError.ROL_OCUPADO)
-                else:
-                    sesion.rol = mensaje.valor
-                    sesion.ultima_actividad = ahora
-                    self.roles[mensaje.valor] = sesion
-                    self._encolar(sesion, "OK")
-                    LOG.info("REGISTER %s aceptado", mensaje.valor)
-                    if mensaje.valor == TipoCliente.ACTUADOR:
-                        reciente = self.ultima_lectura is not None and ahora - self.ultima_lectura < PLAZO_LECTURAS
-                        self._actuar(self.ultimo_comando if reciente else ComandoLeds())
-            elif sesion.rol != TipoCliente.SENSOR or mensaje.tipo != "POST":
-                self.rechazar(sesion, MotivoError.MENSAJE_INVALIDO)
-            else:
-                sesion.ultima_actividad = ahora
-                self.ultima_lectura = ahora
-                self.ultimo_comando = ControlDistancia.calcular_comando(mensaje.valor)
-                LOG.info(linea)
-                self._actuar(self.ultimo_comando)
+            if rol in self.roles:
+                return False
+            self.roles[rol] = cliente
+            cliente.rol = rol
+            cliente.enviar("OK")
+            if rol == TipoCliente.ACTUADOR:
+                # El actuador recibe el estado actual si la lectura es reciente; si no, apagado.
+                reciente = (self.ultima_lectura is not None
+                            and time.monotonic() - self.ultima_lectura < PLAZO)
+                self._actuar(self.ultimo_comando if reciente else ComandoLeds())
+            return True
 
-    def rechazar(self, sesion: Sesion, motivo: MotivoError):
+    def nueva_lectura(self, distancia: float):
         with self.lock:
-            self.liberar(sesion)
-            sesion.cerrando = True
-            sesion.inicio_cierre = time.monotonic()
-            self._encolar(sesion, crear_error(motivo))
-            LOG.info("ERROR reason=%s", motivo)
+            self.ultima_lectura = time.monotonic()
+            self.ultimo_comando = ControlDistancia.calcular_comando(distancia)
+            self._actuar(self.ultimo_comando)
 
-    def liberar(self, sesion: Sesion):
+    def liberar(self, cliente: Cliente):
         with self.lock:
-            if self.roles.get(TipoCliente.SENSOR) is sesion:
-                del self.roles[TipoCliente.SENSOR]
+            if cliente.rol is None or self.roles.get(cliente.rol) is not cliente:
+                return
+            del self.roles[cliente.rol]
+            if cliente.rol == TipoCliente.SENSOR:
+                # Sin sensor no hay datos validos: se apagan los LEDs.
                 self.ultima_lectura = None
                 self.ultimo_comando = ComandoLeds()
                 self._actuar(self.ultimo_comando)
-            if self.roles.get(TipoCliente.ACTUADOR) is sesion:
-                del self.roles[TipoCliente.ACTUADOR]
-            sesion.rol = None
+            cliente.rol = None
 
-    def revisar_plazos(self, sesion: Sesion):
-        with self.lock:
-            ahora = time.monotonic()
-            if sesion.cerrando:
-                if sesion.salida.vacia() or ahora - sesion.inicio_cierre >= PLAZO_CIERRE:
-                    sesion.detener.set()
-            elif sesion.rol is None and ahora - sesion.aceptada >= PLAZO_REGISTRO:
-                self.rechazar(sesion, MotivoError.NO_REGISTRADO)
-            elif sesion.rol == TipoCliente.SENSOR and ahora - sesion.ultima_actividad >= PLAZO_LECTURAS:
-                LOG.info("2000 ms sin POST; cerrando sensor")
-                self.liberar(sesion)
-                sesion.detener.set()
+    def _actuar(self, comando: ComandoLeds):
+        """Envia un SET al actuador registrado. Se llama con el lock tomado."""
+        actuador = self.roles.get(TipoCliente.ACTUADOR)
+        if actuador is None:
+            return
+        linea = crear_comando(comando)
+        try:
+            actuador.enviar(linea)
+            LOG.info("%s", linea)
+        except OSError:
+            # Actuador desconectado o sin leer durante PLAZO: se libera su rol.
+            LOG.warning("No se pudo enviar al actuador; cerrando su conexion")
+            del self.roles[TipoCliente.ACTUADOR]
+            actuador.rol = None
+            actuador.cortar()
 
 
 class ManejadorConexion(socketserver.BaseRequestHandler):
     def handle(self):
-        servidor = self.server
-        with servidor.estado.lock:
-            sesion = servidor.sesiones[self.request]
+        self.cliente = Cliente(self.request)
+        self.request.settimeout(PLAZO)
+        self.server.agregar(self.cliente)
+        receptor = ReceptorLineas()
         try:
-            while not sesion.detener.is_set():
-                servidor.estado.revisar_plazos(sesion)
-                if sesion.detener.is_set():
-                    break
-                lectura = [] if sesion.cerrando else [self.request]
-                escritura = [] if sesion.salida.vacia() else [self.request]
-                listos, escribibles, _ = select.select(lectura, escritura, [], INTERVALO_ATENCION)
-                servidor.estado.revisar_plazos(sesion)
-                if sesion.detener.is_set():
-                    break
-                if escribibles:
-                    sesion.salida.enviar(self.request)
-                if listos and not sesion.cerrando:
-                    try:
-                        bloque = self.request.recv(512)
-                    except (BlockingIOError, InterruptedError):
-                        continue
-                    if not bloque:
-                        break
-                    try:
-                        for linea in sesion.receptor.agregar(bloque):
-                            servidor.estado.procesar(sesion, linea)
-                            if sesion.cerrando or sesion.detener.is_set():
-                                break
-                    except MensajeInvalido:
-                        servidor.estado.rechazar(sesion, MotivoError.MENSAJE_INVALIDO)
-        except (OSError, ValueError):
-            LOG.debug("Socket cerrado", exc_info=True)
+            while not self.server.cerrando:
+                try:
+                    bloque = self.request.recv(128)
+                except TimeoutError:
+                    if self.cliente.rol == TipoCliente.ACTUADOR:
+                        continue  # El actuador solo recibe; su silencio es normal.
+                    if self.cliente.rol is None:
+                        self.cerrar_con_error(MotivoError.NO_REGISTRADO)
+                    else:
+                        LOG.info("2000 ms sin POST; cerrando sensor")
+                    return
+                if not bloque:
+                    return
+                for linea in receptor.agregar(bloque):
+                    motivo = self.procesar(linea)
+                    if motivo is not None:
+                        self.cerrar_con_error(motivo)
+                        return
+        except MensajeInvalido:
+            self.cerrar_con_error(MotivoError.MENSAJE_INVALIDO)
+        except OSError:
+            LOG.debug("Conexion cerrada", exc_info=True)
         finally:
-            servidor.estado.liberar(sesion)
-            with servidor.estado.lock:
-                servidor.sesiones.pop(self.request, None)
+            self.server.estado.liberar(self.cliente)
+            self.server.quitar(self.cliente)
+
+    def procesar(self, linea: str):
+        """Atiende una linea completa. Devuelve el motivo de error o None si es aceptada."""
+        mensaje = leer_mensaje(linea)
+        estado = self.server.estado
+        if self.cliente.rol is None:
+            if mensaje.tipo == "REGISTER":
+                if not estado.registrar(self.cliente, mensaje.valor):
+                    return MotivoError.ROL_OCUPADO
+                LOG.info("REGISTER %s aceptado", mensaje.valor)
+                return None
+            if mensaje.tipo in ("POST", "SET"):
+                return MotivoError.NO_REGISTRADO
+            return MotivoError.MENSAJE_INVALIDO
+        if self.cliente.rol == TipoCliente.SENSOR and mensaje.tipo == "POST":
+            LOG.info("%s", linea)
+            estado.nueva_lectura(mensaje.valor)
+            return None
+        # Segundo REGISTER, SET desde un cliente u otro mensaje que no corresponde al rol.
+        return MotivoError.MENSAJE_INVALIDO
+
+    def cerrar_con_error(self, motivo: MotivoError):
+        # Liberar primero: un sensor rechazado apaga los LEDs aunque el envio falle.
+        self.server.estado.liberar(self.cliente)
+        try:
+            self.cliente.enviar(crear_error(motivo))
+            LOG.info("ERROR reason=%s", motivo)
+            self.request.shutdown(socket.SHUT_WR)
+            # Leer lo que el cliente siga enviando: cerrar con datos sin leer envia un RST
+            # y el cliente podria perder el ERROR.
+            limite = time.monotonic() + PLAZO
+            while time.monotonic() < limite and self.request.recv(512):
+                pass
+        except OSError:
+            pass
 
 
 class ServidorTcp(socketserver.ThreadingTCPServer):
-    daemon_threads = False
-    block_on_close = True
-    request_queue_size = MAX_CONEXIONES
     allow_reuse_address = False
 
     def __init__(self, direccion=("0.0.0.0", 5000)):
         self.estado = EstadoSistema()
-        self.sesiones = {}
-        self._cerrado = False
+        self.cerrando = False
+        self._clientes = set()
+        self._lock_clientes = threading.Lock()
         super().__init__(direccion, ManejadorConexion)
 
     def server_bind(self):
+        # En Windows evita que otro proceso escuche en el mismo puerto a la vez.
         if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
             self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
         super().server_bind()
 
-    def process_request(self, request, client_address):
-        request.setblocking(False)
-        request.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        with self.estado.lock:
-            if self._cerrado or len(self.sesiones) >= MAX_CONEXIONES:
-                self.shutdown_request(request)
-                return
-            self.sesiones[request] = Sesion(request)
-        try:
-            super().process_request(request, client_address)
-        except Exception:
-            with self.estado.lock:
-                self.sesiones.pop(request, None)
-            raise
+    def agregar(self, cliente: Cliente):
+        with self._lock_clientes:
+            self._clientes.add(cliente)
+
+    def quitar(self, cliente: Cliente):
+        with self._lock_clientes:
+            self._clientes.discard(cliente)
+
+    def clientes_abiertos(self) -> int:
+        with self._lock_clientes:
+            return len(self._clientes)
 
     def server_close(self):
-        with self.estado.lock:
-            self._cerrado = True
-            sesiones = list(self.sesiones.values())
-            for sesion in sesiones:
-                sesion.detener.set()
-        for sesion in sesiones:
-            try:
-                sesion.conexion.shutdown(socket.SHUT_RDWR)
-            except OSError:
-                pass
+        # Cortar los sockets despierta a los hilos bloqueados en recv; luego se esperan.
+        self.cerrando = True
+        with self._lock_clientes:
+            clientes = list(self._clientes)
+        for cliente in clientes:
+            cliente.cortar()
         super().server_close()
