@@ -11,13 +11,29 @@ add_executable(pruebas_receptor_lineas receptor_lineas.cpp)
 target_link_libraries(pruebas_receptor_lineas PRIVATE Compartido)
 add_test(NAME receptor_lineas COMMAND pruebas_receptor_lineas)
 
-if(WIN32)
-    add_executable(pruebas_cola_envio cola_envio.cpp)
-    target_link_libraries(pruebas_cola_envio PRIVATE ServidorTcp)
-    add_test(NAME cola_envio COMMAND pruebas_cola_envio)
+add_executable(verificar_contrato verificar_contrato.cpp)
+target_link_libraries(verificar_contrato PRIVATE Compartido)
 
-    add_executable(pruebas_servidor_tcp servidor_tcp.cpp)
-    target_link_libraries(pruebas_servidor_tcp PRIVATE ServidorTcp)
-    add_test(NAME servidor_tcp COMMAND pruebas_servidor_tcp)
-    set_tests_properties(servidor_tcp PROPERTIES TIMEOUT 90)
+add_executable(pruebas_sensor_ultrasonico
+    sensor_ultrasonico.cpp
+    "${PROJECT_SOURCE_DIR}/apps/firmware/src/SensorUltrasonico.cpp"
+)
+target_include_directories(pruebas_sensor_ultrasonico PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/fakes"
+    "${PROJECT_SOURCE_DIR}/apps/firmware/include"
+)
+add_test(NAME sensor_ultrasonico COMMAND pruebas_sensor_ultrasonico)
+
+find_package(Python3 3.13 QUIET COMPONENTS Interpreter)
+if(Python3_FOUND)
+    add_test(NAME servidor_python
+        COMMAND "${Python3_EXECUTABLE}" -m unittest discover -s tests/python -v
+    )
+    set_tests_properties(servidor_python PROPERTIES
+        WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+        ENVIRONMENT "IOT_CONTRACT_EXE=$<TARGET_FILE:verificar_contrato>"
+        TIMEOUT 90
+    )
+else()
+    message(STATUS "Python 3.13 no encontrado; ejecutar unittest con Python 3.13 por separado.")
 endif()

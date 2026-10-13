@@ -1,6 +1,8 @@
 # Compartido
 
-Biblioteca C++11 reutilizable por el servidor Windows y los clientes ESP32. Contiene los tipos del dominio, `ControlDistancia`, `ProtocoloAplicacion` y `ReceptorLineas`, sin dependencia de Arduino o Winsock.
+Biblioteca C++11 reutilizable por ambos clientes ESP32. Contiene los estados, `ProtocoloAplicacion` y `ReceptorLineas`. `ControlDistancia` C++ se conserva como referencia de las pruebas; la clasificación en ejecución pertenece a `apps/servidor/dominio.py`.
+
+El servidor Python tiene su propia representación de los mensajes. `tests/contratos/protocolo.json` y el verificador nativo comprueban la compatibilidad de ambas implementaciones.
 
 ## Crear e interpretar mensajes
 
@@ -48,7 +50,7 @@ El límite es **127 bytes de contenido más LF: 128 bytes en el cable**. Una lí
 
 Al abrir una conexión nueva, llamar a `reiniciar()` para descartar fragmentos y errores anteriores. Una línea completa todavía debe pasar la validación de `ProtocoloAplicacion`: delimitarla no implica aceptar su comando.
 
-El [servidor TCP de Windows](../../apps/servidor/README.md) implementa las políticas de registro, roles ocupados, ausencia de lecturas y escrituras parciales. Los adaptadores de los ESP32 se implementarán en las siguientes etapas. La especificación completa está en el [diseño del sistema](../../docs/diagramas/Diseno_del_sistema.md).
+El [servidor TCP Python](../../apps/servidor/README.md) implementa las políticas de registro, roles ocupados, ausencia de lecturas y escrituras parciales. Los adaptadores de los ESP32 se implementarán en las siguientes etapas. La especificación completa está en el [diseño del sistema](../../docs/diagramas/Diseno_del_sistema.md).
 
 ## Pruebas
 
