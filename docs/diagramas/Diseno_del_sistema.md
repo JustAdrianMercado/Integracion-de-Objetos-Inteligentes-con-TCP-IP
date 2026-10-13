@@ -121,7 +121,7 @@ VGPIO18 = VECHO × (R2 + R3) / (R1 + R2 + R3)
 VGPIO18 = 5 V × 4.4 kΩ / 6.6 kΩ ≈ 3.33 V
 ```
 
-La lectura conserva el pulso TRIG de 10 µs y el timeout de ECHO de 30000 µs definidos en [`SensorUltrasonico.cpp`](../../apps/firmware/src/cliente/SensorUltrasonico.cpp).
+La lectura conserva el pulso TRIG de 10 µs y el timeout de ECHO de 30000 µs definidos en [`SensorUltrasonico.cpp`](../../apps/firmware/src/SensorUltrasonico.cpp).
 
 ### 3.2 Objeto inteligente con actuadores
 
@@ -176,7 +176,8 @@ classDiagram
     }
 
     class ControlDistancia {
-        +calcularComando(float distanciaCm) ComandoLeds
+        <<Python>>
+        +calcular_comando(distancia_cm) ComandoLeds
     }
 
     class TipoCliente {
@@ -186,11 +187,8 @@ classDiagram
     }
 
     class ProtocoloAplicacion {
-        +crearRegistro(TipoCliente tipo, char* salida)
-        +crearLectura(float distanciaCm, char* salida)
-        +crearComando(ComandoLeds comando, char* salida)
-        +leerRegistro(const char* linea, TipoCliente& tipo) bool
-        +leerLectura(const char* linea, float& distanciaCm) bool
+        +crearRegistro(TipoCliente tipo, char* salida) bool
+        +crearLectura(float distanciaCm, char* salida) bool
         +leerComando(const char* linea, ComandoLeds& comando) bool
     }
 
@@ -220,7 +218,7 @@ classDiagram
     ProtocoloAplicacion ..> TipoCliente : interpreta el registro
     ClienteTcp --> ProtocoloAplicacion : registro y respuestas
     ClienteTcp --> TipoCliente : identifica su función
-    ServidorTcp --> ProtocoloAplicacion : interpreta y responde
+    ServidorTcp ..> ProtocoloAplicacion : mismo contrato en protocolo.py
     ServidorTcp --> ControlDistancia : calcula la actuación
 
     note for SensorUltrasonico "Hardware del ESP32 sensor"
@@ -229,7 +227,7 @@ classDiagram
     note for ControlDistancia "Reglas ejecutadas en la PC"
 ```
 
-Las firmas representan las interfaces principales previstas. Las salidas de texto disponen de un buffer de 128 bytes: hasta 127 caracteres de contenido y un terminador C `\0`. `ClienteTcp::enviar()` agrega el `\n` al contenido; `recibir()` devuelve una línea completa sin ese delimitador. `ProtocoloAplicacion` trabaja sobre ese contenido. Al interpretar `distance=invalid`, `leerLectura()` entrega `NAN`; `ControlDistancia` lo convierte en los tres estados apagados.
+Las firmas representan las interfaces principales previstas. Las salidas de texto disponen de un buffer de 128 bytes: hasta 127 caracteres de contenido y un terminador C `\0`. `ClienteTcp::enviar()` agrega el `\n` al contenido; `recibir()` devuelve una línea completa sin ese delimitador. `ProtocoloAplicacion` trabaja sobre ese contenido. En el servidor, `distance=invalid` se interpreta como `NaN` y `ControlDistancia` lo convierte en los tres estados apagados.
 
 | Ubicación / módulo | Clases y tipos | Responsabilidad |
 |---|---|---|
@@ -239,7 +237,7 @@ Las firmas representan las interfaces principales previstas. Las salidas de text
 | Dominio compartido | `EstadoLed`, `ComandoLeds` | Representar la actuación sin depender de GPIO o sockets. |
 | Protocolo compartido | `ProtocoloAplicacion`, `TipoCliente` | Traducir entre mensajes de texto y datos C++. |
 
-Los tipos y el protocolo C++ pertenecen al firmware; Python tiene sus equivalentes en `apps/servidor`. Las relaciones del diagrama representan responsabilidades y el contrato, cuya compatibilidad se verifica en `tests/contratos`. `ControlDistancia` C++ permanece como referencia de prueba y la versión Python ejecuta las reglas en la PC. Se conserva `SensorUltrasonico`. `ControladorLeds` recibe un comando de estados mediante `establecerEstados()`; el controlador original de la Práctica 1, que clasificaba con `establecerDistancia()`, se conserva como `ControladorLedsLocal` solo para el programa local de referencia.
+Los tipos y el protocolo C++ pertenecen al firmware; Python tiene sus equivalentes en `apps/servidor`. El código C++ común a ambos ESP32 está en `apps/firmware/lib/Compartido` (`Tipos.h`, `ProtocoloAplicacion`, `ReceptorLineas`). `ControlDistancia` existe solo en Python: las reglas se ejecutan en la PC. `ControladorLeds` recibe un comando de estados mediante `establecerEstados()`; el actuador no clasifica distancias.
 
 ## 5. Diagramas de secuencia
 

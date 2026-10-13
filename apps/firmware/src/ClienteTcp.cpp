@@ -4,8 +4,6 @@
 #include <lwip/sockets.h>
 #include <string.h>
 
-#include "ComandoLeds.h"
-#include "MotivoError.h"
 #include "ProtocoloAplicacion.h"
 
 ClienteTcp::ClienteTcp(TipoCliente tipo, const char* ssid, const char* clave,
@@ -17,8 +15,7 @@ void ClienteTcp::limpiarBuffers() {
     receptor_.reiniciar();
     longitudEnvio_ = 0;
     enviados_ = 0;
-    primeraRecibida_ = 0;
-    cantidadRecibidas_ = 0;
+    hayComando_ = false;
 }
 
 void ClienteTcp::iniciar() {
@@ -26,11 +23,9 @@ void ClienteTcp::iniciar() {
     limpiarBuffers();
     estado_ = Estado::Deshabilitado;
     wifiConectado_ = false;
-    char registro[ProtocoloAplicacion::CapacidadBuffer];
-    if (ssid_ == nullptr || ssid_[0] == '\0' || strlen(ssid_) > 32 ||
-        clave_ == nullptr || strlen(clave_) > 64 || ipServidor_ == nullptr ||
-        !direccion_.fromString(ipServidor_) || direccion_ == IPAddress(0, 0, 0, 0) ||
-        puerto_ == 0 || !ProtocoloAplicacion::crearRegistro(tipo_, registro, sizeof(registro))) {
+    // El ejemplo de configuracion (SSID vacio, IP 0.0.0.0) compila pero no intenta conectar.
+    if (ssid_ == nullptr || ssid_[0] == '\0' || clave_ == nullptr || ipServidor_ == nullptr ||
+        !direccion_.fromString(ipServidor_) || direccion_ == IPAddress(0, 0, 0, 0) || puerto_ == 0) {
         Serial.println("[Red] Completar apps/firmware/include/ConfiguracionRed.h y recompilar.");
         return;
     }
@@ -68,15 +63,7 @@ bool ClienteTcp::prepararEnvio(const char* contenido, uint32_t ahora) {
     if (contenido == nullptr || longitudEnvio_ != 0) {
         return false;
     }
-    // Examinar como maximo el limite mas un byte; no copiar una linea demasiado larga.
-    size_t longitud = 0;
-    while (longitud < sizeof(envio_) && contenido[longitud] != '\0') {
-        const unsigned char byte = static_cast<unsigned char>(contenido[longitud]);
-        if (byte < 32 || byte > 126) {
-            return false;
-        }
-        ++longitud;
-    }
+    const size_t longitud = strlen(contenido);
     if (longitud == 0 || longitud > ProtocoloAplicacion::LongitudMaximaContenido) {
         return false;
     }
@@ -89,22 +76,17 @@ bool ClienteTcp::prepararEnvio(const char* contenido, uint32_t ahora) {
 }
 
 bool ClienteTcp::enviar(const char* contenido) {
-    float distancia = 0;
-    return puedeEnviar() && ProtocoloAplicacion::leerLectura(contenido, distancia) &&
+    // El registro lo envia el propio cliente; la aplicacion solo publica lecturas del sensor.
+    return puedeEnviar() && contenido != nullptr && strncmp(contenido, "POST ", 5) == 0 &&
            prepararEnvio(contenido, static_cast<uint32_t>(millis()));
 }
 
 bool ClienteTcp::recibir(char* linea, size_t capacidad) {
-    if (!estaRegistrado() || cantidadRecibidas_ == 0 || linea == nullptr) {
+    if (!estaRegistrado() || !hayComando_ || linea == nullptr || capacidad <= strlen(comando_)) {
         return false;
     }
-    const size_t longitud = strlen(recibidas_[primeraRecibida_]);
-    if (capacidad <= longitud) {
-        return false;
-    }
-    memcpy(linea, recibidas_[primeraRecibida_], longitud + 1);
-    primeraRecibida_ = (primeraRecibida_ + 1) % CAPACIDAD_RECEPCIONES;
-    --cantidadRecibidas_;
+    memcpy(linea, comando_, strlen(comando_) + 1);
+    hayComando_ = false;
     return true;
 }
 
@@ -132,29 +114,26 @@ void ClienteTcp::avanzarEnvio(uint32_t ahora) {
 }
 
 bool ClienteTcp::procesarLinea(const char* linea, uint32_t ahora) {
-    MotivoError motivo;
-    if (ProtocoloAplicacion::leerError(linea, motivo)) {
+    if (strncmp(linea, "ERROR ", 6) == 0) {
         Serial.print("[TCP] ");
         Serial.println(linea);
         cerrar(ahora, "Registro o mensaje rechazado; reintento en 2000 ms.");
         return false;
     }
-    if (estado_ == Estado::EsperandoOk && longitudEnvio_ == 0 &&
-        ProtocoloAplicacion::leerOk(linea)) {
+    if (estado_ == Estado::EsperandoOk && longitudEnvio_ == 0 && strcmp(linea, "OK") == 0) {
         estado_ = Estado::Registrado;
         Serial.println("[TCP] Registro aceptado (OK).");
         return true;
     }
     ComandoLeds comando;
     if (estado_ == Estado::Registrado && tipo_ == TipoCliente::Actuador &&
-        ProtocoloAplicacion::leerComando(linea, comando) &&
-        cantidadRecibidas_ < CAPACIDAD_RECEPCIONES) {
-        const size_t indice = (primeraRecibida_ + cantidadRecibidas_) % CAPACIDAD_RECEPCIONES;
-        memcpy(recibidas_[indice], linea, strlen(linea) + 1);
-        ++cantidadRecibidas_;
+        ProtocoloAplicacion::leerComando(linea, comando)) {
+        // Solo importa el ultimo SET: si la aplicacion no consumio el anterior, se reemplaza.
+        memcpy(comando_, linea, strlen(linea) + 1);
+        hayComando_ = true;
         return true;
     }
-    cerrar(ahora, "Respuesta inesperada o cola llena; reintento en 2000 ms.");
+    cerrar(ahora, "Respuesta inesperada o SET invalido; reintento en 2000 ms.");
     return false;
 }
 
@@ -172,7 +151,7 @@ void ClienteTcp::atenderRecepcion(uint32_t ahora) {
         for (int i = 0; i < recibidos; ++i) {
             const ResultadoRecepcion resultado = receptor_.agregar(bloque[i]);
             if (resultado == ResultadoRecepcion::MensajeInvalido) {
-                cerrar(ahora, "Framing invalido; reintento en 2000 ms.");
+                cerrar(ahora, "Linea invalida; reintento en 2000 ms.");
                 return;
             }
             if (resultado == ResultadoRecepcion::LineaCompleta &&

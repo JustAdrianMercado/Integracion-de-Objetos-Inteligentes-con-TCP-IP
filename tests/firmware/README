@@ -1,7 +1,0 @@
-Directorio reservado para pruebas de firmware con PlatformIO.
-
-Todavía no contiene casos de prueba. PlatformIO lo utiliza mediante
-test_dir = tests/firmware para mantenerlo separado de las pruebas de PC.
-
-Las pruebas actuales de la biblioteca Compartido están en tests/native/
-y se ejecutan mediante CMake y CTest desde la raíz del repositorio.

@@ -74,10 +74,8 @@ int main() {
     const std::string contenido127 = prefijo + std::string(127 - prefijo.size() - 1, '0') + "1";
     pruebas.comprobar(entregar(receptor, contenido127, lineas) && lineas.empty() && receptor.linea() == nullptr,
                      "127 bytes de contenido esperan LF");
-    float distancia = 0.0F;
-    pruebas.comprobar(entregar(receptor, "\n", lineas) && lineas.size() == 1 &&
-                     lineas[0] == contenido127 && ProtocoloAplicacion::leerLectura(lineas[0].c_str(), distancia) &&
-                     distancia == 1.0F, "128 bytes en el cable: 127 de contenido mas LF");
+    pruebas.comprobar(entregar(receptor, "\n", lineas) && lineas.size() == 1 && lineas[0] == contenido127,
+                     "128 bytes en el cable: 127 de contenido mas LF");
 
     receptor.reiniciar();
     lineas.clear();
@@ -126,12 +124,6 @@ int main() {
                      lineasSensor == std::vector<std::string>{"POST distance=45.00"} &&
                      lineasActuador == std::vector<std::string>{"REGISTER type=actuator"},
                      "Buffers independientes para conexiones intercaladas");
-
-    receptor.reiniciar();
-    lineas.clear();
-    pruebas.comprobar(entregar(receptor, "UNKNOWN\n", lineas) && lineas.size() == 1 &&
-                     !ProtocoloAplicacion::leerOk(lineas[0].c_str()),
-                     "Una linea ASCII completa todavia debe pasar la validacion de sintaxis");
 
     std::cout << pruebas.total - pruebas.fallos << " de " << pruebas.total
               << " comprobaciones del receptor aprobadas.\n";

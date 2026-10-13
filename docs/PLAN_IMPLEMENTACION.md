@@ -1,5 +1,7 @@
 # Plan de implementación revisado
 
+> Las secciones de las etapas 1 a 6 describen la estructura de su momento. La estructura vigente está en [Simplificación del código](#simplificación-del-código).
+
 ## Arquitectura y responsables
 
 El sistema mantiene dos ESP32 clientes y una PC servidor. Los ESP32 usan C++ con Arduino-ESP32 2.0.17 y PlatformIO Core 6.2.0. La PC usa Python 3.13 y biblioteca estándar. El monorepo y el contrato ASCII/TCP se conservan.
@@ -163,9 +165,29 @@ build_src_filter =
 - Flujo automatizado sensor Python → servidor Python por TCP real → firmware C++ del actuador, con los tres rangos, `invalid`, desconexión del sensor y plazo sin comandos.
 - La asociación WiFi real, el parpadeo visible y el tiempo de respuesta físico se verifican con las placas en la etapa 7.
 
+## Simplificación del código
+
+**Rama:** `refactor/simplify-code`, sobre la etapa 6. **Objetivo:** un proyecto más pequeño y explicable en la defensa, con el mismo comportamiento (protocolo, rangos, parpadeos, plazos y roles).
+
+| Cambio | Motivo |
+|---|---|
+| Se eliminaron el programa local de la Práctica 1 (`main.cpp`, `ControladorLedsLocal`) y su entorno. | No forma parte de la Práctica 2; sigue en el historial de Git. |
+| Se eliminó `ControlDistancia` C++. | Las reglas se ejecutan solo en el servidor Python (`dominio.py`). |
+| Se eliminaron el contrato de 127 vectores, `verificar_contrato` y los puentes firmware↔Python. | Capa de pruebas avanzada difícil de explicar; cada lado conserva sus propias pruebas. |
+| `packages/Compartido` pasó a `apps/firmware/lib/Compartido`; `EstadoLed.h`, `ComandoLeds.h` y `TipoCliente.h` se unieron en `Tipos.h`; se quitó `MotivoError.h`. | Todo el firmware queda bajo `apps/firmware`. |
+| `src/cliente/` pasó a `src/`. | Menos niveles de carpetas. |
+| `ProtocoloAplicacion` conserva solo `crearRegistro`, `crearLectura` y `leerComando`. | Son las únicas funciones que usan los ESP32. |
+| `ClienteTcp` guarda solo el último `SET` en lugar de una cola de cuatro. | El actuador solo necesita el estado más reciente. |
+| El servidor Python usa sockets bloqueantes con plazo de 2 s y `sendall`, sin `select`, colas de envío parcial ni límites de conexiones/bytes. | De 254 a 201 líneas, con un flujo lineal por conexión. |
+| El servidor ya no convierte las distancias a float32. | El sensor envía dos decimales; los límites 50.00 y 100.00 se clasifican igual. |
+
+**Simplificación consciente:** el plazo de 2 s del servidor se renueva con cualquier dato recibido, no solo con líneas completas.
+
+**Validación:** `sensor` y `actuador` compilan; 7/7 suites CTest aprobadas (6 nativas y `servidor_python`, 26 pruebas).
+
 ## Etapa 7 — Integración física y pruebas
 
-Rama prevista: `ft/system-integration`.
+Rama prevista: `ft/system-integration`. **Estado:** en curso. Documentos: [guía de montaje](GUIA_MONTAJE.md) y [pruebas físicas](PRUEBAS_FISICAS.md); el servidor acepta `--registro` y `tools/analizar_registro.py` resume el registro para PN-01 y PN-04.
 
 Entregar la guía de conexión para las placas reales: pines, HC-SR04, divisor de ECHO, resistencias de LEDs, alimentación, GND, cables USB de datos, puertos COM, carga de cada entorno, WiFi e IP de la PC.
 
