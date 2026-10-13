@@ -2,15 +2,17 @@
 
 Monorepo de la Práctica 2 de SIS-234: dos clientes ESP32 con firmware C++ y un servidor TCP en Python 3.13 que clasifica las distancias y ordena los estados de los LEDs.
 
-El servidor Python está implementado y se prueba con clientes simulados en la PC. El firmware actual conserva la base local de la Práctica 1; los programas independientes del sensor y del actuador se implementarán en las etapas 5 y 6.
+El servidor Python y el cliente ESP32 sensor están implementados. El sensor se registra por WiFi/TCP y publica mediciones cada 250 ms; un actuador de consola permite revisar el flujo. El cliente ESP32 actuador se implementará en la etapa 6. El programa local de la Práctica 1 se conserva como referencia.
 
 ## Estructura
 
 ```text
 apps/
   firmware/
-    include/              Declaraciones de hardware; configuración de red en etapa 5
-    src/                  Base ESP32 actual; cliente/ se incorporará en etapa 5
+    include/              Hardware y adaptador TCP; configuración de red local
+    src/cliente/          PrincipalSensor, ClienteTcp y SensorUltrasonico
+    src/main.cpp          Programa local de referencia de la Práctica 1
+    README.md             Configuración, carga y pruebas del sensor
   servidor/
     __main__.py           Entrada de consola con argparse y logging
     servidor.py           socketserver, sesiones, roles y colas de envío
@@ -21,16 +23,17 @@ packages/
   Compartido/             Tipos y protocolo C++ reutilizables por ambos ESP32
                           ControlDistancia C++ como referencia de las pruebas
 tests/
-  python/                 unittest: dominio, protocolo, concurrencia y TCP real
-  native/                 C++: dominio, protocolo y sensor con GPIO simulados
+  python/                 unittest: dominio, protocolo, concurrencia y flujo C++ → Python
+  native/                 C++: dominio, protocolo y firmware con WiFi/GPIO simulados
   contratos/              Vectores para comprobar C++ y Python juntos
   firmware/               Pruebas de PlatformIO
 docs/
-  PLAN_IMPLEMENTACION.md  Revisión de etapas y especificación de la etapa 5
+  PLAN_IMPLEMENTACION.md  Estado y alcance de las entregas
   diagramas/              Arquitectura, circuitos y contrato de aplicación
   consigna/               Enunciado del docente
 CMakeLists.txt            Construcción y pruebas nativas C++
 platformio.ini            Construcción del firmware ESP32
+tools/simular_actuador.py  Cliente de consola que muestra los SET
 .python-version          Rama de Python utilizada: 3.13
 INFORME.md                Informe académico, trabajado por separado
 ```
@@ -66,13 +69,23 @@ py -3.13 -m apps.servidor --ip 0.0.0.0 --puerto 5000
 
 Los clientes configurarán la IPv4 real de la PC como destino. `Ctrl+C` detiene el servidor. La [guía del servidor](apps/servidor/README.md) describe los roles, plazos, colas y opciones. En sistemas con Python 3.13 disponible como `python3`, se usa `python3 -m apps.servidor`.
 
-## Compilar la base ESP32
+## Compilar el sensor ESP32
 
 ```powershell
-pio run -e esp32doit-devkit-v1
+pio run -e sensor
 ```
 
-Este entorno mantiene el programa local de referencia a 115200 baudios. Su filtro incluye únicamente sus tres archivos actuales. Los entornos `sensor` y `actuador` se habilitarán cuando existan sus programas principales, en las etapas 5 y 6.
+`sensor` es el entorno predeterminado. Copiar `apps/firmware/include/ConfiguracionRed.example.h` a `ConfiguracionRed.h` en la misma carpeta y completar SSID, contraseña e IPv4 de la PC. El archivo local está excluido de Git. Sin configuración, compila con el ejemplo vacío y solicita completarlo por consola.
+
+La [guía del firmware](apps/firmware/README.md) explica la configuración y carga. El programa local continúa compilando con `pio run -e esp32doit-devkit-v1`; `actuador` se habilitará en la etapa 6.
+
+Para observar los comandos desde otra terminal en la misma PC:
+
+```powershell
+py -3.13 -m tools.simular_actuador --ip 127.0.0.1 --puerto 5000
+```
+
+El simulador se registra como actuador, muestra los `SET` completos y termina con `Ctrl+C`. No requiere paquetes externos.
 
 ## Pruebas
 
@@ -98,18 +111,18 @@ cmake --build build/native
 ctest --test-dir build/native --output-on-failure
 ```
 
-CMake incorpora `unittest` cuando encuentra Python 3.13. La prueba de contrato ejecuta el verificador C++ con los mismos 127 vectores que Python. Si se ejecuta `unittest` sin haber construido ese verificador, solo se omite esa comparación entre lenguajes. Las pruebas TCP usan `127.0.0.1` y puertos libres; verifican los plazos reales de 2 segundos y duran aproximadamente 16 segundos.
+CMake incorpora `unittest` cuando encuentra Python 3.13. La prueba de contrato ejecuta el verificador C++ con los mismos 127 vectores que Python. Otro puente enlaza el firmware C++ con el servidor Python mediante TCP real, simulando WiFi, reloj y GPIO. CTest proporciona ambos ejecutables automáticamente. En `unittest` por separado se omiten la comparación y los dos flujos del firmware si no están configurados `IOT_CONTRACT_EXE` e `IOT_SENSOR_EXE`. Las pruebas TCP usan `127.0.0.1`, puertos libres y plazos reales de 2 segundos.
 
 ## Etapas
 
 1. **Conservada:** estados y reglas C++ de referencia, con pruebas nativas.
 2. **Conservada:** organización como monorepo.
 3. **Conservada y ampliada:** protocolo C++ y contraparte Python, con pruebas de compatibilidad.
-4. **Migrada para revisión:** servidor Python que sustituye la implementación Winsock.
-5. **Pendiente:** cliente ESP32 sensor, adaptador WiFi/TCP y entorno `sensor`.
+4. **Implementada y fusionada:** servidor Python que sustituye la implementación Winsock.
+5. **Implementada para revisión:** cliente ESP32 sensor, adaptador WiFi/TCP, entorno `sensor` y actuador simulado.
 6. **Pendiente:** cliente ESP32 actuador, estados y parpadeos, entorno `actuador`.
 7. **Pendiente:** integración física, cableado, configuración de la PC y pruebas con ambas placas.
 
-La entrega actual se revisa en `fix/reorganize-architecture`, con el commit propuesto `fix: reorganize architecture`. La etapa 5 está [especificada en el plan](docs/PLAN_IMPLEMENTACION.md#etapa-5--cliente-esp32-sensor) para implementarla después de revisar y subir esta entrega.
+La entrega actual se revisa en `ft/sensor-client`, con el commit propuesto `ft: implement ESP32 sensor client`. La [etapa 5 del plan](docs/PLAN_IMPLEMENTACION.md#etapa-5--cliente-esp32-sensor) distingue las comprobaciones automatizadas de la validación pendiente en la placa real.
 
 El [diseño del sistema](docs/diagramas/Diseno_del_sistema.md) conserva el contrato de mensajes. `INFORME.md` y la documentación histórica quedan a cargo del compañero que redacta el informe.

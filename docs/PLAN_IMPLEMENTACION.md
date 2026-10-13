@@ -21,11 +21,11 @@ El protocolo C++ no necesita un refactor para hablar con Python. Las nuevas prue
 
 `SensorUltrasonico` se conserva y se verifica con GPIO simulados. El `ControladorLeds` actual pertenece al programa local de la Práctica 1: su clasificación se reemplazará por estados recibidos al desarrollar el actuador, en la etapa 6.
 
-## Entrega actual: fix de arquitectura
+## Fix de arquitectura — fusionado
 
-Rama: `fix/reorganize-architecture`. Commit propuesto: `fix: reorganize architecture`.
+Rama: `fix/reorganize-architecture`. Commit: `fix: reorganize architecture`, fusionado en `main` antes de iniciar la etapa 5.
 
-Esta entrega incluye:
+Esta entrega incluyó:
 
 1. Servidor Python modular con `socketserver`, hilos de conexión, roles protegidos y logging.
 2. Retirada del servidor C++ y de su dependencia Winsock en la construcción.
@@ -34,11 +34,11 @@ Esta entrega incluye:
 5. Versiones fijadas de la plataforma y el framework ESP32, con filtro explícito para el programa de referencia.
 6. README y diseño actualizados; este plan define la siguiente entrega.
 
-El firmware local continúa compilando en `esp32doit-devkit-v1`. Los entornos de los dos clientes se habilitan cuando existan sus programas, en las etapas 5 y 6. La implementación del cliente sensor queda pendiente después de este fix.
+El firmware local continúa compilando en `esp32doit-devkit-v1`. Este fix dejó la base preparada para implementar los dos clientes en las etapas 5 y 6.
 
 ## Etapa 5 — Cliente ESP32 sensor
 
-**Rama prevista:** `ft/sensor-client`.
+**Rama:** `ft/sensor-client`. **Estado:** implementada para revisión, sin commit ni push. Commit propuesto: `ft: implement ESP32 sensor client`.
 
 **Objetivo:** el ESP32 de 30 pines con HC-SR04 se conecta por WiFi al servidor Python, completa su registro y envía una lectura cada 250 ms. Un actuador simulado en la PC permite verificar los comandos antes de implementar el segundo ESP32.
 
@@ -56,7 +56,7 @@ El firmware local continúa compilando en `esp32doit-devkit-v1`. Los entornos de
 
 Los encabezados de hardware y los tipos de `packages/Compartido` se reutilizan. `WiFi.h` y `WiFiClient.h` los proporciona el framework Arduino-ESP32 fijado en PlatformIO.
 
-### Orden de implementación
+### Trabajo implementado
 
 1. Añadir la configuración de red de ejemplo y la exclusión del archivo local.
 2. Implementar `ClienteTcp` con estados de conexión y registro. WiFi y TCP se atienden desde `actualizar`; las conexiones tienen un tiempo de espera acotado.
@@ -76,9 +76,13 @@ Los encabezados de hardware y los tipos de `packages/Compartido` se reutilizan. 
 - Tras reconectar, repetir el registro y publicar lecturas nuevas. El sensor no acumula un historial de mensajes durante la desconexión.
 - La clasificación de rangos se ejecuta en Python; el programa sensor se dedica a medición y transporte.
 
-### Filtros previstos
+El cliente conserva un solo envío pendiente y el principal omite nuevas mediciones mientras esté ocupado. Un envío atascado durante 2000 ms cierra la conexión. La apertura TCP espera como máximo 250 ms por intento; el plazo de registro comienza al terminar esa apertura. `send` y `recv` usan `MSG_DONTWAIT` sobre el descriptor de `WiFiClient` para atender escrituras y recepción sin esperas internas.
 
-Las opciones comunes de plataforma, framework y velocidad de monitor se heredan de `[env]`. Al implementar los archivos anteriores se añadirá:
+La configuración vacía permite compilar sin credenciales, pero deshabilita los intentos y muestra por consola cómo completar el archivo local. La [guía del firmware](../apps/firmware/README.md) describe configuración, carga y uso del simulador.
+
+### Filtros implementados
+
+Las opciones comunes de plataforma, framework y velocidad de monitor se heredan de `[env]`. `sensor` es el entorno predeterminado y tiene este filtro:
 
 ```ini
 [env:sensor]
@@ -101,6 +105,13 @@ Los filtros se interpretan respecto de `apps/firmware/src`. Al excluir primero t
 5. Cortar y recuperar WiFi produce reintentos acotados y una recuperación observable por consola serie.
 6. Los mensajes fragmentados y las escrituras parciales se manejan completos; no se publica antes de `OK`.
 7. Las suites Python y C++ continúan aprobadas. Las verificaciones que requieren placa se distinguen de las simuladas.
+
+### Validación de la entrega
+
+- Compilación del entorno `sensor` y del programa local `esp32doit-devkit-v1` aprobadas con Arduino-ESP32 2.0.17.
+- Pruebas nativas del adaptador y del mismo principal sensor con WiFi, reloj y GPIO simulados: registro antes de publicar, intervalo de 250 ms, fragmentos, envíos parciales, errores, plazos, reintentos, descarte de datos anteriores y desbordamiento de `millis()`.
+- Flujo automatizado del firmware C++ → servidor Python por TCP real → actuador simulado, incluyendo los tres rangos, lectura inválida, reinicio del servidor y pérdida/recuperación de WiFi simulada.
+- La asociación a una red WiFi real, medidas físicas y recuperación observable por consola serie quedan pendientes de probar en la placa con su configuración local. La integración y el montaje completo se verifican en la etapa 7.
 
 **Fin de etapa:** entregar los cambios sin commit ni push y esperar la revisión y publicación manual antes de iniciar el actuador.
 
