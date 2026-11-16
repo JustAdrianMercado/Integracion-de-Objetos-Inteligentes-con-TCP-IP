@@ -2,6 +2,8 @@
 
 > Las secciones de las etapas 1 a 6 describen la estructura de su momento. La estructura vigente está en [Simplificación del código](#simplificación-del-código).
 
+> Actualización de control: los rangos vigentes son (0, 5], (5, 15], (15, 25] y >25 cm (Lejos), según el [diseño actualizado](diagramas/Diseno_del_sistema.md#2-rangos-y-lógica-de-control). Lejos ordena tres `blink_2` sincronizados; las referencias de rangos en etapas anteriores describen su configuración histórica.
+
 ## Arquitectura y responsables
 
 El sistema mantiene dos ESP32 clientes y una PC servidor. Los ESP32 usan C++ con Arduino-ESP32 2.0.17 y PlatformIO Core 6.2.0. La PC usa Python 3.13 y biblioteca estándar. El monorepo y el contrato ASCII/TCP se conservan.
@@ -71,7 +73,7 @@ Los encabezados de hardware y los tipos de `packages/Compartido` se reutilizan. 
 
 - Antes de publicar, completar `REGISTER type=sensor` y esperar `OK`, con un plazo de 2000 ms.
 - Cada 250 ms enviar un `POST` nuevo mientras esté registrado. El mensaje usa punto y dos decimales; ausencia de ECHO, cero, negativos o datos no finitos producen `distance=invalid`.
-- Mantener TRIG de 10 µs, timeout de ECHO de 30000 µs y, como base, GPIO 5 para TRIG y 18 para ECHO.
+- Mantener TRIG de 10 µs, timeout de ECHO de 30000 µs y, como base, GPIO23 para TRIG y 18 para ECHO.
 - Conservar el progreso de las escrituras parciales y los fragmentos de entrada. Transmitir un LF por mensaje y ningún terminador C.
 - Ante `ERROR`, respuesta no permitida, registro vencido o desconexión, cerrar la conexión y reiniciar sus buffers y estado.
 - Reintentar TCP cada 2000 ms; WiFi, 2000 ms después de una pérdida y luego cada 10000 ms para no reiniciar una asociación en curso (ajuste de la etapa 6). Usar `millis()` y resta sin signo para los temporizadores, con un ciclo principal sin esperas repetitivas que detengan la atención del cliente.

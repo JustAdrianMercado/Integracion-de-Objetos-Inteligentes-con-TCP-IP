@@ -13,6 +13,7 @@ public:
     void iniciar();
     // Recibe los tres estados juntos. Un LED que conserva su estado mantiene su fase;
     // los cambios se reflejan en el siguiente actualizar(). Un parpadeo nuevo empieza encendido.
+    // Al entrar con los tres en Parpadeo2Hz se sincronizan; repetirlo conserva la fase conjunta.
     void establecerEstados(const ComandoLeds& comando);
     // Llamar en cada vuelta del ciclo principal: alterna los parpadeos sin bloquear.
     void actualizar(unsigned long tiempoActual);

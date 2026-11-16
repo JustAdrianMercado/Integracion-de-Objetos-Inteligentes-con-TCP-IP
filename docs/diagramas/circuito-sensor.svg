@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="titulo descripcion">
   <title id="titulo">Circuito del objeto inteligente con sensor ultrasónico</title>
-  <desc id="descripcion">ESP32 alimentado por USB. HC-SR04 con VCC a 5 V, GND común, TRIG a GPIO5 y ECHO a GPIO18 mediante R1 de 2.2 kiloohmios y R2 y R3 de 2.2 kiloohmios en serie hacia GND.</desc>
+  <desc id="descripcion">ESP32 alimentado por USB. HC-SR04 con VCC a 5 V, GND común, TRIG a GPIO23 y ECHO a GPIO18 mediante R1 de 2.2 kiloohmios y R2 y R3 de 2.2 kiloohmios en serie hacia GND.</desc>
 
   <defs>
     <style>
@@ -27,7 +27,7 @@
 
   <rect class="fondo" width="1600" height="1000"/>
   <text class="titulo" x="800" y="48" text-anchor="middle">Circuito del objeto inteligente 1 — Sensor</text>
-  <text class="texto-pequeno" x="800" y="78" text-anchor="middle">Práctica 2 · ESP32 y HC-SR04 · Conexiones del montaje de la práctica 1</text>
+  <text class="texto-pequeno" x="800" y="78" text-anchor="middle">Práctica 2 · ESP32 y HC-SR04 · TRIG en GPIO23 · ECHO en GPIO18</text>
 
   <!-- Alimentación USB y ESP32. -->
   <text class="texto" x="250" y="125" text-anchor="middle">Alimentación por USB (5 V)</text>
@@ -42,7 +42,7 @@
   <rect class="pin" x="350" y="420" width="80" height="38"/>
   <text class="texto" x="390" y="446" text-anchor="middle">GND</text>
   <rect class="pin" x="350" y="500" width="80" height="38"/>
-  <text class="texto" x="390" y="526" text-anchor="middle">GPIO5</text>
+  <text class="texto" x="390" y="526" text-anchor="middle">GPIO23</text>
   <rect class="pin" x="350" y="610" width="80" height="38"/>
   <text class="texto" x="390" y="636" text-anchor="middle">GPIO18</text>
 

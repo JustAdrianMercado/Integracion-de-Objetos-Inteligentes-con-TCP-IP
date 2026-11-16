@@ -10,16 +10,23 @@ from apps.servidor.protocolo import (
 
 class PruebasDominio(unittest.TestCase):
     def test_limites_de_los_rangos(self):
-        for distancia, led in [(45, "rojo"), (49.99, "rojo"), (50, "amarillo"),
-                               (99.99, "amarillo"), (100, "verde"), (120, "verde")]:
+        off = EstadoLed.APAGADO
+        b2 = EstadoLed.PARPADEO_2_HZ
+        b4 = EstadoLed.PARPADEO_4_HZ
+        rojo = ComandoLeds(b4, off, off)
+        amarillo = ComandoLeds(off, b2, off)
+        verde = ComandoLeds(off, off, b2)
+        lejos = ComandoLeds(b2, b2, b2)
+        for distancia, esperado in [(0.01, rojo), (5, rojo), (5.01, amarillo), (15, amarillo),
+                                    (15.01, verde), (25, verde), (25.01, lejos), (50, lejos),
+                                    (100, lejos)]:
             with self.subTest(distancia=distancia):
                 comando = ControlDistancia.calcular_comando(distancia)
-                self.assertNotEqual(getattr(comando, led), EstadoLed.APAGADO)
-                self.assertEqual(sum(e != EstadoLed.APAGADO for e in
-                                     (comando.rojo, comando.amarillo, comando.verde)), 1)
+                self.assertEqual(comando, esperado)
+                self.assertEqual(leer_mensaje(crear_comando(comando)).valor, esperado)
 
     def test_lecturas_invalidas_apagan(self):
-        for distancia in [0, -1, math.nan, math.inf]:
+        for distancia in [0, -1, math.nan, math.inf, -math.inf]:
             self.assertEqual(ControlDistancia.calcular_comando(distancia), ComandoLeds())
 
 

@@ -24,8 +24,11 @@ class ControlDistancia:
     def calcular_comando(distancia_cm: float) -> ComandoLeds:
         if not math.isfinite(distancia_cm) or distancia_cm <= 0:
             return ComandoLeds()
-        if distancia_cm < 50:
+        if distancia_cm <= 5:
             return ComandoLeds(rojo=EstadoLed.PARPADEO_4_HZ)
-        if distancia_cm < 100:
+        if distancia_cm <= 15:
             return ComandoLeds(amarillo=EstadoLed.PARPADEO_2_HZ)
-        return ComandoLeds(verde=EstadoLed.ENCENDIDO)
+        if distancia_cm <= 25:
+            return ComandoLeds(verde=EstadoLed.PARPADEO_2_HZ)
+        return ComandoLeds(EstadoLed.PARPADEO_2_HZ, EstadoLed.PARPADEO_2_HZ,
+                           EstadoLed.PARPADEO_2_HZ)

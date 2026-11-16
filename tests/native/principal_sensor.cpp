@@ -20,7 +20,9 @@ int main() {
     red.wifiConectado = true;
     setup(); loop();
     comprobar(Serial.velocidad == 115200, "Consola serie a 115200 baudios");
-    comprobar(red.salida == "REGISTER type=sensor\n" && red.mediciones == 0, "No medir ni publicar antes de OK");
+    comprobar(red.salida == "REGISTER type=sensor\n" && red.mediciones == 0 &&
+              red.modosPin[23] == OUTPUT && red.niveles[23] == LOW && red.modosPin[18] == INPUT &&
+              red.modosPin[5] != OUTPUT, "TRIG=23 en OUTPUT/LOW, ECHO=18 en INPUT y no medir antes de OK");
     red.salida.clear(); red.reloj = 249; loop();
     comprobar(red.salida.empty() && red.mediciones == 0, "El intervalo no habilita lecturas sin registrar");
     red.entrada = "O"; loop();

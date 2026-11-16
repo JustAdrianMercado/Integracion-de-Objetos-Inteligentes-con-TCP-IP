@@ -18,7 +18,7 @@ flowchart LR
     subgraph SENSOR["Objeto inteligente 1 — Sensor"]
         HC["HC-SR04"]
         ESP_S["ESP32 / ESP-WROOM-32<br/>Cliente TCP: sensor<br/>192.168.0.101<br/>Envía REGISTER y POST"]
-        ESP_S -->|TRIG: GPIO5| HC
+        ESP_S -->|TRIG: GPIO23| HC
         HC -->|ECHO: divisor y GPIO18| ESP_S
     end
 
@@ -77,14 +77,15 @@ El firmware conserva C++ con Arduino-ESP32 2.0.17 y PlatformIO. El servidor se i
 
 ## 2. Rangos y lógica de control
 
-El servidor aplica tres rangos contiguos y sin solapamiento para toda distancia válida mayor que cero. Los límites de 50 y 100 cm pertenecen al rango que comienza en ese valor.
+La lógica de control vigente aplica cuatro rangos contiguos y sin solapamiento para toda distancia válida mayor que cero: (0, 5], (5, 15], (15, 25] y (25, +∞). Los límites de 5, 15 y 25 cm pertenecen al intervalo que termina en ese valor. Esta actualización incorpora el estado Lejos sin trasladar la clasificación al firmware.
 
 | Distancia recibida | LED rojo | LED amarillo | LED verde | Significado |
 |---|---|---|---|---|
 | Lectura inválida | `off` | `off` | `off` | Apagado de los actuadores. |
-| 0 < distancia < 50 cm | `blink_4` | `off` | `off` | Cercanía: rojo a 4 Hz. |
-| 50 ≤ distancia < 100 cm | `off` | `blink_2` | `off` | Distancia intermedia: amarillo a 2 Hz. |
-| distancia ≥ 100 cm | `off` | `off` | `on` | Distancia mayor: verde fijo. |
+| 0 < distancia ≤ 5 cm | `blink_4` | `off` | `off` | Rojo a 4 Hz. |
+| 5 < distancia ≤ 15 cm | `off` | `blink_2` | `off` | Amarillo a 2 Hz. |
+| 15 < distancia ≤ 25 cm | `off` | `off` | `blink_2` | Verde a 2 Hz. |
+| distancia > 25 cm | `blink_2` | `blink_2` | `blink_2` | Lejos: los tres simultáneos a 2 Hz. |
 
 | Estado del protocolo | Estado C++ propuesto | Comportamiento |
 |---|---|---|
@@ -93,13 +94,13 @@ El servidor aplica tres rangos contiguos y sin solapamiento para toda distancia 
 | `blink_2` | `EstadoLed::Parpadeo2Hz` | Ciclo completo de 500 ms: 250 ms encendido y 250 ms apagado. |
 | `blink_4` | `EstadoLed::Parpadeo4Hz` | Ciclo completo de 250 ms: 125 ms encendido y 125 ms apagado. |
 
-Al cambiar el modo de un LED, el actuador aplica su estado inicial inmediatamente: apagado para `off`, encendido para `on` y encendido para comenzar un parpadeo. Si vuelve a recibir el mismo modo, conserva la fase y la temporización del LED. Esto permite enviar un `SET` por lectura sin reiniciar el parpadeo.
+Al cambiar el modo de un LED, el actuador aplica su estado inicial inmediatamente: apagado para `off`, encendido para `on` y encendido para comenzar un parpadeo. Si vuelve a recibir el mismo modo, conserva la fase y la temporización del LED. Esto permite enviar un `SET` por lectura sin reiniciar el parpadeo. Al entrar en el comando con los tres en `blink_2`, el controlador sincroniza el inicio de sus fases; repetirlo conserva la fase común. `on` continúa siendo válido en el protocolo, aunque ya no lo generan estos rangos.
 
 Un timeout de ECHO, una lectura no finita o una distancia menor o igual que cero se comunican como `POST distance=invalid`. Al iniciar el actuador, al detectar una desconexión o al cumplirse los tiempos de ausencia de datos de la sección 6.5, los tres LEDs quedan apagados.
 
 ## 3. Circuitos de los objetos inteligentes
 
-Los componentes y los pines proceden del montaje de la práctica 1. Se reparten entre dos ESP32, alimentados por USB. Cada circuito comparte GND entre sus propios componentes; la comunicación entre objetos se realiza por WiFi.
+Los componentes y los pines proceden del montaje de la práctica 1, excepto TRIG del sensor, actualizado a GPIO23; ECHO permanece en GPIO18. Se reparten entre dos ESP32, alimentados por USB. Cada circuito comparte GND entre sus propios componentes; la comunicación entre objetos se realiza por WiFi.
 
 ### 3.1 Objeto inteligente con sensor
 
@@ -110,7 +111,7 @@ Los componentes y los pines proceden del montaje de la práctica 1. Se reparten 
 | Alimentación del ESP32 | USB de 5 V. |
 | HC-SR04 VCC | VIN / 5 V del ESP32. |
 | HC-SR04 GND | GND del ESP32. |
-| HC-SR04 TRIG | GPIO5. |
+| HC-SR04 TRIG | GPIO23. |
 | HC-SR04 ECHO | R1 de 2.2 kΩ; su salida forma el nodo conectado a GPIO18. |
 | Nodo GPIO18 a GND | R2 y R3 de 2.2 kΩ en serie. |
 
@@ -258,20 +259,25 @@ sequenceDiagram
     Note over S,PC: Los registros también pueden llegar en el orden inverso
 
     Note over S,PC: Ejemplos sucesivos: un POST cada 250 ms
-    S->>PC: POST distance=45.00
-    PC->>PC: calcularComando(45.00): rango rojo
+    S->>PC: POST distance=5.00
+    PC->>PC: calcularComando(5.00): rango rojo
     PC->>A: SET redLed=blink_4 yellowLed=off greenLed=off
     A->>A: Alternar el rojo cada 125 ms
 
-    S->>PC: POST distance=75.00
-    PC->>PC: calcularComando(75.00): rango amarillo
+    S->>PC: POST distance=15.00
+    PC->>PC: calcularComando(15.00): rango amarillo
     PC->>A: SET redLed=off yellowLed=blink_2 greenLed=off
     A->>A: Alternar el amarillo cada 250 ms
 
-    S->>PC: POST distance=120.00
-    PC->>PC: calcularComando(120.00): rango verde
-    PC->>A: SET redLed=off yellowLed=off greenLed=on
-    A->>A: Mantener el verde encendido
+    S->>PC: POST distance=25.00
+    PC->>PC: calcularComando(25.00): rango verde
+    PC->>A: SET redLed=off yellowLed=off greenLed=blink_2
+    A->>A: Alternar el verde cada 250 ms
+
+    S->>PC: POST distance=25.01
+    PC->>PC: calcularComando(25.01): rango Lejos
+    PC->>A: SET redLed=blink_2 yellowLed=blink_2 greenLed=blink_2
+    A->>A: Sincronizar los tres y alternarlos cada 250 ms
 
     S->>PC: POST distance=invalid
     PC->>PC: calcularComando(NAN): todos apagados
@@ -299,8 +305,8 @@ sequenceDiagram
         S->>PC: Abrir nueva conexión TCP
         S->>PC: REGISTER type=sensor
         PC-->>S: OK
-        S->>PC: POST distance=120.00
-        PC->>A: SET redLed=off yellowLed=off greenLed=on
+        S->>PC: POST distance=25.00
+        PC->>A: SET redLed=off yellowLed=off greenLed=blink_2
     else El actuador detecta desconexión o acumula 2000 ms sin SET
         A->>A: Apagar los tres LEDs
         opt La conexión TCP se cerró
@@ -360,11 +366,11 @@ Cada conexión mantiene su propio buffer de entrada. El receptor acumula bytes h
 REGISTER type=sensor\n
 REGISTER type=actuator\n
 OK\n
-POST distance=45.00\n
+POST distance=5.00\n
 POST distance=invalid\n
 SET redLed=blink_4 yellowLed=off greenLed=off\n
 SET redLed=off yellowLed=blink_2 greenLed=off\n
-SET redLed=off yellowLed=off greenLed=on\n
+SET redLed=off yellowLed=off greenLed=blink_2\n
 SET redLed=off yellowLed=off greenLed=off\n
 ERROR reason=role_busy\n
 ```
@@ -424,8 +430,8 @@ Los temporizadores utilizan tiempo monótono local. En los ESP32, la medición, 
 | Requisito de la consigna | Elementos del diseño | Validación prevista |
 |---|---|---|
 | RF1: medir distancia. | Circuito del sensor, `SensorUltrasonico` y `POST`. | Comparar lecturas con una regla o cinta métrica. |
-| RF2: clasificar al menos tres rangos. | Tabla de la sección 2 y `ControlDistancia` en la PC. | Probar valores interiores y límites de 50 y 100 cm. |
-| RF3: actuar según el rango. | Circuito del actuador, `ControladorLeds` y `SET`. | Observar color, frecuencia y apagado de los demás LEDs. |
+| RF2: clasificar al menos tres rangos. | Tabla de la sección 2 y `ControlDistancia` en la PC. | Probar valores interiores y límites de 5, 15 y 25 cm, además de 50 y 100 cm en Lejos. |
+| RF3: actuar según el rango. | Circuito del actuador, `ControladorLeds` y `SET`. | Observar color, frecuencia y apagado de los demás LEDs; en Lejos, comprobar los tres parpadeos sincronizados. |
 | RF4: comunicar mediante TCP sobre WiFi. | Arquitectura, `ClienteTcp`, `ServidorTcp`, secuencias y protocolo. | Registrar ambos objetos y comprobar `POST` → clasificación → `SET`. |
 
 ### 7.2 Casos para validar durante la implementación
@@ -434,9 +440,9 @@ Estos casos definen los resultados esperados. Su ejecución y sus evidencias se 
 
 | Caso | Entrada o situación | Resultado esperado |
 |---|---|---|
-| PV-01 | 45 cm y 49.99 cm. | Solo rojo a 4 Hz. |
-| PV-02 | 50 cm, 75 cm y 99.99 cm. | Solo amarillo a 2 Hz. |
-| PV-03 | 100 cm y 120 cm. | Solo verde fijo. |
+| PV-01 | 3 cm y 5 cm. | Solo rojo a 4 Hz. |
+| PV-02 | 5.01 cm y 15 cm. | Solo amarillo a 2 Hz. |
+| PV-03 | 15.01 y 25 cm; luego 25.01, 50 y 100 cm. | Solo verde a 2 Hz hasta 25 cm; por encima, Lejos con los tres simultáneos a 2 Hz. |
 | PV-04 | Timeout de ECHO o lectura inválida. | `POST distance=invalid`; `SET` con todos apagados. |
 | PV-05 | Comandos idénticos cada 250 ms. | Conservar la fase del parpadeo; ciclos de 500 o 250 ms. |
 | PV-06 | Registro sensor primero y actuador primero. | Ambos órdenes funcionan; el actuador recibe estado reciente o apagado inicial. |
@@ -456,7 +462,7 @@ Estos casos definen los resultados esperados. Su ejecución y sus evidencias se 
 | Atributo | Criterio de aceptación | Método previsto |
 |---|---|---|
 | Estabilidad | Al menos 10 minutos continuos sin reinicios ni bloqueos. | Observación del sistema completo y registro de eventos de los tres equipos. |
-| Exactitud | Error absoluto máximo ≤ 3 cm en el intervalo de trabajo previsto de 3 a 150 cm. | Comparar mediciones físicas que cubran los tres rangos, usando una referencia graduada. |
+| Exactitud | Error absoluto máximo ≤ 3 cm en el intervalo de trabajo previsto de 3 a 150 cm. | Comparar mediciones físicas que cubran los cuatro rangos, usando una referencia graduada. |
 | Tiempo de respuesta | Cambio visible del actuador en ≤ 1 s desde el cambio de distancia. | Medir de extremo a extremo: sensor → servidor → actuador, con una grabación o un instrumento de tiempo común. |
 | Frecuencia de muestreo | Al menos 2 lecturas/s; intervalo nominal de 250 ms. | Contar lecturas obtenidas y `POST` recibidos por el servidor durante una ventana de tiempo. |
 | Calidad del código | C++ simple, modular, orientado a objetos y con comentarios útiles. | Revisar responsabilidades, nombres y dependencia de las reglas respecto del hardware y la red. |

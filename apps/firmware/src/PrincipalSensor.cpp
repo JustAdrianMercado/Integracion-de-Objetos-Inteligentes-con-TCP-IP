@@ -11,7 +11,7 @@
 #endif
 
 namespace {
-constexpr uint8_t PIN_DISPARO = 5;
+constexpr uint8_t PIN_DISPARO = 23;
 constexpr uint8_t PIN_ECO = 18;
 constexpr uint32_t INTERVALO_MEDICION_MS = 250;
 
@@ -25,7 +25,7 @@ bool estabaRegistrado = false;
 void setup() {
     Serial.begin(115200);
     sensor.iniciar();
-    Serial.println("[Sensor] HC-SR04: TRIG=5, ECHO=18; intervalo=250 ms.");
+    Serial.println("[Sensor] HC-SR04: TRIG=23, ECHO=18; intervalo=250 ms.");
     cliente.iniciar();
 }
 

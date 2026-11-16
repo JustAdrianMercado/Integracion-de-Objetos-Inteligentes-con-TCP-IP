@@ -28,7 +28,9 @@ class PruebasSimuladores(unittest.TestCase):
         with ActuadorSimulado(*self.direccion) as actuador:
             self.assertEqual(actuador.recibir_comando(2), ComandoLeds())
             with SensorSimulado(*self.direccion) as sensor:
-                for lectura, valor in [("45.00", 45), ("75.00", 75), ("120.00", 120),
+                for lectura, valor in [("5.00", 5), ("5.01", 5.01), ("15.00", 15),
+                                       ("15.01", 15.01), ("25.00", 25), ("25.01", 25.01),
+                                       ("50.00", 50), ("100.00", 100),
                                        ("invalid", float("nan"))]:
                     sensor.publicar(lectura)
                     self.assertEqual(actuador.recibir_comando(2), ControlDistancia.calcular_comando(valor))
@@ -49,7 +51,7 @@ class PruebasSimuladores(unittest.TestCase):
     def test_analizar_registro(self):
         registro = """2026-10-13 10:00:00,000 INFO REGISTER actuator aceptado
 2026-10-13 10:00:01,000 INFO REGISTER sensor aceptado
-2026-10-13 10:00:01,000 INFO POST distance=45.00
+2026-10-13 10:00:01,000 INFO POST distance=5.00
 2026-10-13 10:00:01,001 INFO SET redLed=blink_4 yellowLed=off greenLed=off
 2026-10-13 10:00:01,250 INFO POST distance=invalid
 2026-10-13 10:00:01,500 INFO POST distance=120.00

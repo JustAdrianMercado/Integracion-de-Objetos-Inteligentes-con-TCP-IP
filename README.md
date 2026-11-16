@@ -3,11 +3,13 @@
 Práctica 2 de SIS-234: dos ESP32 (sensor y actuador) con firmware C++ y un servidor TCP en Python 3.13 que clasifica las distancias y ordena los estados de los LEDs.
 
 ```text
-ESP32 sensor --POST distance=45.00--> PC servidor --SET redLed=blink_4 ...--> ESP32 actuador
+ESP32 sensor --POST distance=5.00--> PC servidor --SET redLed=blink_4 ...--> ESP32 actuador
 (HC-SR04)                             (reglas de rango)                      (3 LEDs)
 ```
 
-El sensor publica una medición cada 250 ms. El servidor la clasifica (rojo 4 Hz por debajo de 50 cm, amarillo 2 Hz hasta 100 cm, verde fijo desde 100 cm) y envía el comando al actuador, que lo aplica a los tres LEDs. Queda la integración física con ambas placas (etapa 7).
+El sensor publica una medición cada 250 ms. El servidor la clasifica (rojo 4 Hz para 0 < d <= 5 cm, amarillo 2 Hz para 5 < d <= 15 cm, verde 2 Hz para 15 < d <= 25 cm y Lejos con los tres LEDs sincronizados a 2 Hz para d > 25 cm) y envía el comando al actuador, que lo aplica a los tres LEDs. El equipo confirma el funcionamiento integrado con ambas placas; las mediciones y evidencias de la etapa 7 siguen pendientes de incorporación.
+
+Montaje definitivo: sensor con Micro-USB, TRIG en GPIO23 (D23) y ECHO en GPIO18 (D18) mediante tres resistencias de 2.2 kΩ; actuador con USB-C y LEDs verde/amarillo/rojo en GPIO25/26/27.
 
 ## Estructura
 
@@ -52,7 +54,7 @@ Para probar una placa sin la otra:
 
 ```powershell
 py -3.13 -m tools.simular_actuador --ip 127.0.0.1 --puerto 5000
-py -3.13 -m tools.simular_sensor --ip 127.0.0.1 --puerto 5000 --distancias 45,75,120,invalid
+py -3.13 -m tools.simular_sensor --ip 127.0.0.1 --puerto 5000 --distancias 5,15,25,50,invalid
 ```
 
 ## Pruebas
@@ -86,6 +88,6 @@ ctest --test-dir build/windows --output-on-failure
 4. Servidor TCP (Python).
 5. Cliente ESP32 sensor.
 6. Cliente ESP32 actuador, más la auditoría y la simplificación del código.
-7. **En curso:** montaje, integración física y pruebas con ambas placas ([guía](docs/GUIA_MONTAJE.md) y [pruebas](docs/PRUEBAS_FISICAS.md)).
+7. **En curso:** documentación de evidencias y mediciones con ambas placas; montaje e integración funcional confirmados por el equipo ([guía](docs/GUIA_MONTAJE.md) y [pruebas](docs/PRUEBAS_FISICAS.md)).
 
 El [plan de implementación](docs/PLAN_IMPLEMENTACION.md) detalla cada entrega y el [diseño del sistema](docs/diagramas/Diseno_del_sistema.md) contiene el protocolo y los diagramas. `INFORME.md` y la documentación histórica quedan a cargo del compañero que redacta el informe.

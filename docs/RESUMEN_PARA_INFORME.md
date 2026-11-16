@@ -1,6 +1,6 @@
 # Resumen para el informe — etapas 5 y 6 y simplificación
 
-Estado al **13 de octubre de 2026**. Este documento resume lo implementado en las etapas 5 (cliente sensor) y 6 (cliente actuador), y la simplificación posterior del código, para actualizar `INFORME.md` mientras se realizan el montaje y las pruebas físicas (etapa 7). No reemplaza al informe: indica qué cambió, dónde está el código y qué evidencias existen.
+Base al **13 de octubre de 2026**, con rangos, sincronización de Lejos e inventario de pruebas actualizados al **15 de noviembre de 2026**. Este documento resume lo implementado en las etapas 5 (cliente sensor) y 6 (cliente actuador), y la simplificación posterior del código, para actualizar `INFORME.md` mientras se realizan el montaje y las pruebas físicas (etapa 7). No reemplaza al informe: indica qué cambió, dónde está el código y qué evidencias existen.
 
 ## 0. Antes de editar
 
@@ -9,14 +9,16 @@ Estado al **13 de octubre de 2026**. Este documento resume lo implementado en la
 - **Rutas que cambiaron con la simplificación.** Los enlaces del informe actual a `packages/Compartido/...`, `apps/firmware/src/main.cpp`, `ControladorLeds` de la P1 o `ControlDistancia.cpp` ya no existen; usar las rutas de §3.
 - Las pruebas descritas abajo son automatizadas, con hardware simulado. No sustituyen las mediciones de PN-01 a PN-04, que se obtienen con las placas en la etapa 7.
 
+Configuración física definitiva confirmada por el equipo: sensor Micro-USB con TRIG=GPIO23 (D23), ECHO=GPIO18 (D18) y divisor de tres resistencias de 2.2 kΩ; actuador USB-C con verde=GPIO25, amarillo=GPIO26 y rojo=GPIO27. La instrumentación temporal del HC-SR04 fue retirada; se conservan los registros normales.
+
 ## 1. Estado por requerimiento
 
 | Req. | Implementación | Estado para el informe |
 |---|---|---|
 | RF1 | [`SensorUltrasonico`](../apps/firmware/src/SensorUltrasonico.cpp) + [`PrincipalSensor`](../apps/firmware/src/PrincipalSensor.cpp): una medición cada 250 ms tras el registro. | Implementado. Exactitud física pendiente (PN-02). |
-| RF2 | [`dominio.py`](../apps/servidor/dominio.py) en la PC: `< 50`, `50 ≤ d < 100`, `≥ 100` cm. | Implementado y probado en límites (49.99/50/99.99/100). |
-| RF3 | [`ControladorLeds`](../apps/firmware/src/ControladorLeds.cpp) + [`PrincipalActuador`](../apps/firmware/src/PrincipalActuador.cpp): rojo 4 Hz, amarillo 2 Hz, verde fijo; demás apagados. | Implementado y probado con GPIO simulados. Comportamiento visible pendiente (fotos/video). |
-| RF4 | [`ClienteTcp`](../apps/firmware/src/ClienteTcp.cpp) en ambos ESP32 + [`servidor.py`](../apps/servidor/servidor.py): `REGISTER`/`OK`, `POST` → clasificación → `SET`. | Implementado; sensor simulado → servidor → actuador simulado verificado por TCP real. WiFi real pendiente. |
+| RF2 | [`dominio.py`](../apps/servidor/dominio.py) en la PC: `0 < d ≤ 5`, `5 < d ≤ 15`, `15 < d ≤ 25`, `d > 25` cm (Lejos). | Implementado y probado en límites (5/5.01/15/15.01/25/25.01), además de 50 y 100 cm en Lejos. |
+| RF3 | [`ControladorLeds`](../apps/firmware/src/ControladorLeds.cpp) + [`PrincipalActuador`](../apps/firmware/src/PrincipalActuador.cpp): rojo 4 Hz, amarillo 2 Hz, verde 2 Hz (demás apagados en esos tres rangos); Lejos con los tres a 2 Hz sincronizados. | Implementado y probado con GPIO simulados. Comportamiento visible pendiente (fotos/video). |
+| RF4 | [`ClienteTcp`](../apps/firmware/src/ClienteTcp.cpp) en ambos ESP32 + [`servidor.py`](../apps/servidor/servidor.py): `REGISTER`/`OK`, `POST` → clasificación → `SET`. | Implementado; sensor simulado → servidor → actuador simulado verificado por TCP real. Funcionamiento con ambos ESP32 por WiFi confirmado por el equipo; registros físicos pendientes de incorporación. |
 | RNF1–4 | Parámetros: 250 ms de muestreo, plazos de 2000 ms, `connect` de 1000 ms. | Pendiente de medición (PN-01 a PN-04). |
 | RNF5 | Clases separadas por responsabilidad en C++ y Python (ver §3). | Puede documentarse con los enlaces de §3. |
 
@@ -56,7 +58,7 @@ Estado al **13 de octubre de 2026**. Este documento resume lo implementado en la
 ### Fragmentos clave y decisiones que conviene explicar
 
 - **Parpadeo con `millis()` sin `delay()`** ([`ControladorLeds::actualizarLed`](../apps/firmware/src/ControladorLeds.cpp)): resta sin signo para soportar el desbordamiento de `millis()`; el temporizador avanza un intervalo fijo y se resincroniza tras una espera larga.
-- **Conservación de fase:** el servidor envía un `SET` por cada `POST` (cada 250 ms). Un estado repetido no reinicia el parpadeo (`cambiarEstado` ignora estados iguales); si no, el LED a 2 Hz nunca completaría su ciclo.
+- **Conservación de fase:** el servidor envía un `SET` por cada `POST` (cada 250 ms). Un estado repetido no reinicia el parpadeo (`cambiarEstado` ignora estados iguales); si no, el LED a 2 Hz nunca completaría su ciclo. Al entrar con los tres en `blink_2`, se marca un inicio conjunto para sincronizarlos; repetir ese comando conserva la fase común.
 - **Aplicación conjunta:** `leerComando` valida los tres estados antes de modificar el comando; un `SET` con un error no aplica nada.
 - **Vigilancia del actuador** ([`PrincipalActuador.cpp`](../apps/firmware/src/PrincipalActuador.cpp)): con 2000 ms sin `SET` apaga los LEDs y conserva la conexión; cubre una caída del servidor aún no detectada.
 - **Transporte sin bloqueo** ([`ClienteTcp`](../apps/firmware/src/ClienteTcp.cpp)): `send`/`recv` con `MSG_DONTWAIT`, porque `WiFiClient::write` de Arduino-ESP32 2.0.17 puede esperar varios segundos.
@@ -67,14 +69,16 @@ Estado al **13 de octubre de 2026**. Este documento resume lo implementado en la
 
 Ejecución del 13/10/2026 en Windows con MSVC + CTest y Python 3.13: **7/7 suites aprobadas** (191 comprobaciones C++ y 26 pruebas Python). `sensor` y `actuador` compilan con PlatformIO 6.2.0 y Arduino-ESP32 2.0.17.
 
+Actualización de control del 15/11/2026: se ejecutaron las seis suites C++ con MSVC/CTest (230/230 comprobaciones) y, por separado, los 26 métodos Python con Python 3.12.6 (26/26). Se verifican los nuevos límites, Lejos sincronizado, repetición de comandos y apagado por invalidez, desconexión y plazo existente. Son pruebas con GPIO/red simulados y TCP local, no resultados físicos. Los conteos de la tabla corresponden a esta versión; la ejecución anterior permanece como antecedente declarado.
+
 | Suite | Comprobaciones | Qué cubre |
 |---|---:|---|
 | `protocolo_aplicacion` | 29 | `REGISTER`, `POST` con dos decimales e `invalid`, `SET` válidos e inválidos. |
 | `receptor_lineas` | 23 | Fragmentos, LF, longitud y bytes inválidos. |
 | `cliente_tcp` | 76 | Registro, reintentos WiFi/TCP, envíos parciales, errores, plazos y desbordamiento. |
-| `controlador_leds` | 21 | Estados, frecuencias, fase, aplicación conjunta y desbordamiento. |
+| `controlador_leds` | 53 | Estados, frecuencias, fase, entrada y salida de Lejos sincronizado, apagado, aplicación conjunta y desbordamiento. |
 | `principal_sensor` | 19 | Cadencia de 250 ms, eco → distancia, timeout → `invalid`, desconexión. |
-| `principal_actuador` | 23 | Registro, `SET` fragmentado, plazo de 2 s, desconexión y `SET` inválido. |
+| `principal_actuador` | 30 | Registro, `SET` fragmentado, plazo de 2 s, desconexión y `SET` inválido. |
 | `servidor_python` | 26 pruebas | Dominio, protocolo, servidor con sockets reales, simuladores y analizador de registros. |
 
 Correspondencia con los casos PV del [diseño](diagramas/Diseno_del_sistema.md#72-casos-para-validar-durante-la-implementación):
@@ -101,7 +105,7 @@ Se completará con las placas y se pasará al informe a medida que haya evidenci
 
 - Montaje de ambos objetos según los circuitos del [diseño](diagramas/Diseno_del_sistema.md) (§3.1 y §3.2).
 - PN-01 estabilidad ≥ 10 min, PN-02 exactitud ±3 cm (3–150 cm), PN-03 respuesta ≤ 1 s, PN-04 ≥ 2 lecturas/s.
-- Fotos/video de los tres rangos, límites 50/100 cm, lectura inválida y recuperación tras desconexión.
+- Fotos/video de los cuatro rangos, límites 5/15/25 cm y sincronización de Lejos, lectura inválida y recuperación tras desconexión.
 - Riesgos a mencionar en *Análisis crítico* si aparecen: firewall de Windows o aislamiento de clientes en la red WiFi, asociación lenta y la velocidad del sonido (`0.0343 cm/µs` supone unos 20 °C).
 
 ## 6. Para la sección de aportes (§8.4)

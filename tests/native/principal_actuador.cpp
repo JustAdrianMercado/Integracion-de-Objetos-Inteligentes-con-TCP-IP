@@ -16,6 +16,7 @@ const std::string APAGADO = "SET redLed=off yellowLed=off greenLed=off\n";
 const std::string ROJO_4HZ = "SET redLed=blink_4 yellowLed=off greenLed=off\n";
 const std::string AMARILLO_2HZ = "SET redLed=off yellowLed=blink_2 greenLed=off\n";
 const std::string VERDE_FIJO = "SET redLed=off yellowLed=off greenLed=on\n";
+const std::string LEJOS = "SET redLed=blink_2 yellowLed=blink_2 greenLed=blink_2\n";
 
 size_t total = 0;
 size_t fallos = 0;
@@ -89,6 +90,25 @@ int main() {
     comprobar(niveles(LOW, LOW, LOW) && red.tcpAbierto, "Vencer el plazo de comandos despues del desbordamiento");
     paso(UINT32_MAX - 99 + 2001, APAGADO);
     comprobar(niveles(LOW, LOW, LOW) && red.tcpAbierto, "Un SET de apagado se acepta sin cerrar");
+
+    paso(10000, LEJOS);
+    comprobar(niveles(HIGH, HIGH, HIGH), "Lejos enciende los tres al aplicar el SET");
+    paso(10250, LEJOS);
+    comprobar(niveles(LOW, LOW, LOW), "Lejos alterna sincronizado con SET repetido");
+    paso(10500, LEJOS);
+    comprobar(niveles(HIGH, HIGH, HIGH), "Lejos completa un ciclo a 2 Hz");
+    for (uint32_t tiempo = 10750; tiempo <= 12250; tiempo += 250) { paso(tiempo); }
+    paso(12499);
+    comprobar(niveles(LOW, LOW, LOW) && red.tcpAbierto, "Lejos sigue alternando antes del plazo sin SET");
+    paso(12500);
+    comprobar(niveles(LOW, LOW, LOW) && red.tcpAbierto, "El timeout existente tambien apaga Lejos");
+    paso(12600, LEJOS);
+    paso(12601, APAGADO);
+    comprobar(niveles(LOW, LOW, LOW) && red.tcpAbierto, "La lectura invalida apaga Lejos mediante SET");
+    paso(12700, LEJOS);
+    red.remotoCerrado = true;
+    paso(12701);
+    comprobar(niveles(LOW, LOW, LOW) && !red.tcpAbierto, "Perder la comunicacion tambien apaga Lejos");
 
     std::cout << total - fallos << " de " << total << " comprobaciones del principal actuador aprobadas.\n";
     return fallos == 0 ? EXIT_SUCCESS : EXIT_FAILURE;

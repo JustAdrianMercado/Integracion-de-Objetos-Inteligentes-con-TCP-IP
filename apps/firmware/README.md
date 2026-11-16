@@ -2,8 +2,8 @@
 
 | Entorno | Placa | Programa |
 |---|---|---|
-| `sensor` (predeterminado) | ESP32 DEVKIT V1 de 30 pines (`esp32doit-devkit-v1`) | Mide con el HC-SR04 y publica `POST` al servidor Python. |
-| `actuador` | ESP32 genérico de 38 pines (`esp32dev`) | Recibe `SET` del servidor y aplica los estados de los tres LEDs. |
+| `sensor` (predeterminado) | ESP32 DEVKIT V1 de 30 pines, Micro-USB (`esp32doit-devkit-v1`) | Mide con el HC-SR04 y publica `POST` al servidor Python. |
+| `actuador` | ESP32 genérico de 38 pines, USB-C (`esp32dev`) | Recibe `SET` del servidor y aplica los estados de los tres LEDs. |
 
 El servidor decide los estados de los LEDs: el sensor no clasifica distancias y el actuador solo ejecuta los comandos recibidos.
 
@@ -78,7 +78,7 @@ pio device monitor -e actuador --port COMy
 
 El monitor trabaja a 115200 baudios.
 
-- **Sensor:** GPIO 5 para TRIG y GPIO 18 para ECHO, pulso de 10 µs y espera máxima de 30000 µs. ECHO se conecta mediante el divisor a 3.3 V del [circuito del sensor](../../docs/diagramas/Diseno_del_sistema.md#31-objeto-inteligente-con-sensor).
+- **Sensor:** GPIO23 (D23) para TRIG y GPIO18 (D18) para ECHO, pulso de 10 µs y espera máxima de 30000 µs. ECHO se conecta mediante el divisor a 3.3 V del [circuito del sensor](../../docs/diagramas/Diseno_del_sistema.md#31-objeto-inteligente-con-sensor).
 - **Actuador:** verde en GPIO 25, amarillo en GPIO 26 y rojo en GPIO 27, cada uno con su resistencia de 220 Ω a GND.
 
 La guía completa de cableado y las comprobaciones con ambas placas pertenecen a la etapa 7.
@@ -100,12 +100,12 @@ py -3.13 -m tools.simular_actuador --ip 127.0.0.1 --puerto 5000
 Para probar la placa actuadora sin sensor, un sensor que publica distancias cada 250 ms, recorriendo la lista en ciclo durante `--duracion` segundos cada una:
 
 ```powershell
-py -3.13 -m tools.simular_sensor --ip 127.0.0.1 --puerto 5000 --distancias 45,75,120,invalid --duracion 3
+py -3.13 -m tools.simular_sensor --ip 127.0.0.1 --puerto 5000 --distancias 5,15,25,50,invalid --duracion 3
 ```
 
 Desde otra PC, los simuladores reciben la IPv4 del servidor en `--ip`. Debe existir solamente un cliente por rol; cerrar el simulador de un rol antes de conectar la placa real de ese rol (si no, el servidor responde `role_busy`). `Ctrl+C` termina ambos simuladores.
 
-Con lecturas, el actuador muestra rojo `blink_4` por debajo de 50 cm, amarillo `blink_2` entre 50 y menos de 100 cm y verde `on` desde 100 cm. Una lectura inválida o la pérdida del sensor apaga todos.
+Con lecturas, el servidor ordena rojo `blink_4` para 0 < d ≤ 5 cm, amarillo `blink_2` para 5 < d ≤ 15 cm, verde `blink_2` para 15 < d ≤ 25 cm y los tres `blink_2` para d > 25 cm (Lejos). El firmware ejecuta los comandos sin clasificar distancias. Una lectura inválida o la pérdida del sensor apaga todos.
 
 ## Funcionamiento del cliente
 
@@ -125,7 +125,7 @@ Con lecturas, el actuador muestra rojo `blink_4` por debajo de 50 cm, amarillo `
 ### Actuador
 
 - `ClienteTcp` valida cada `SET` completo y guarda el último; `PrincipalActuador` lo retira en cada vuelta y lo entrega a `ControladorLeds`.
-- Los tres estados se aplican juntos. `blink_2` alterna cada 250 ms (2 ciclos/s) y `blink_4` cada 125 ms (4 ciclos/s); un parpadeo nuevo empieza encendido y un `SET` idéntico conserva la fase.
+- Los tres estados se aplican juntos. `blink_2` alterna cada 250 ms (2 ciclos/s) y `blink_4` cada 125 ms (4 ciclos/s); un parpadeo nuevo empieza encendido y un `SET` idéntico conserva la fase. Al entrar con los tres en `blink_2`, el controlador reinicia conjuntamente su fase desde encendido; los comandos repetidos mantienen esa sincronización.
 - Desconexión, `ERROR` o `SET` inválido cierran la conexión y apagan los LEDs al instante. Con 2000 ms sin `SET` completo se apagan manteniendo la conexión; el siguiente `SET` los reactiva.
 
 En la consola de cada ESP32 se verán intentos WiFi/TCP, `Registro aceptado (OK)`, las lecturas publicadas o los apagados del actuador. `ERROR`, mensajes inesperados, desconexiones y plazos vencidos cierran el socket y comienzan un nuevo registro al reconectar.

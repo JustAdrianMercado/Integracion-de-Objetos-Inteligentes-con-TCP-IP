@@ -16,9 +16,17 @@ void ControladorLeds::iniciar() {
 }
 
 void ControladorLeds::establecerEstados(const ComandoLeds& comando) {
+    const bool sincronizar = comando.rojo == EstadoLed::Parpadeo2Hz &&
+        comando.amarillo == EstadoLed::Parpadeo2Hz && comando.verde == EstadoLed::Parpadeo2Hz &&
+        (rojo_.estado != comando.rojo || amarillo_.estado != comando.amarillo || verde_.estado != comando.verde);
     cambiarEstado(rojo_, comando.rojo);
     cambiarEstado(amarillo_, comando.amarillo);
     cambiarEstado(verde_, comando.verde);
+    // Al entrar en el parpadeo conjunto, todos comienzan con el mismo instante y nivel.
+    // Repetir el mismo SET conserva la fase, como en los otros modos.
+    if (sincronizar) {
+        rojo_.pendiente = amarillo_.pendiente = verde_.pendiente = true;
+    }
     comandoActual_ = comando;
 }
 

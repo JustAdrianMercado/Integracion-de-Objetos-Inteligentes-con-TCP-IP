@@ -6,8 +6,8 @@ Pasos para montar los dos objetos inteligentes, conectarlos a la PC, cargar el f
 
 | Objeto | Componentes |
 |---|---|
-| Sensor | ESP32 DEVKIT V1 (30 pines), HC-SR04, 3 resistencias de 2.2 kΩ, protoboard, cables. |
-| Actuador | ESP32 genérico (38 pines), LED rojo, amarillo y verde, 3 resistencias de 220 Ω, protoboard, cables. |
+| Sensor | ESP32 DEVKIT V1 (30 pines, Micro-USB), HC-SR04, 3 resistencias de 2.2 kΩ, protoboard, cables. |
+| Actuador | ESP32 genérico (38 pines, USB-C), LED rojo, amarillo y verde, 3 resistencias de 220 Ω, protoboard, cables. |
 | Comunes | 2 cables USB **de datos** (no solo de carga), PC con Python 3.13 y PlatformIO, red WiFi de 2.4 GHz. |
 
 ## 2. Objeto sensor
@@ -18,12 +18,12 @@ Esquema: [circuito-sensor.svg](diagramas/circuito-sensor.svg) y [diseño §3.1](
 |---|---|
 | VCC | VIN (5 V del USB) |
 | GND | GND |
-| TRIG | GPIO5 (directo) |
-| ECHO | R1 de 2.2 kΩ → nodo → GPIO18; del nodo a GND, R2 + R3 de 2.2 kΩ en serie |
+| TRIG | GPIO23 / D23 (directo) |
+| ECHO | R1 de 2.2 kΩ → nodo → GPIO18 / D18; del nodo a GND, R2 + R3 de 2.2 kΩ en serie |
 
 1. Con la placa **desconectada**, montar el divisor de ECHO: ECHO → R1 → nodo; nodo → GPIO18; nodo → R2 → R3 → GND.
 2. **No conectar ECHO directo a GPIO18:** el HC-SR04 entrega 5 V y el ESP32 tolera 3.3 V. Con el divisor, el nodo queda en unos 3.33 V (5 V × 4.4 kΩ / 6.6 kΩ). Si hay multímetro, comprobar que el nodo no supera 3.4 V con el sensor alimentado.
-3. Conectar TRIG a GPIO5, VCC a VIN y GND a GND.
+3. Conectar TRIG a GPIO23, VCC a VIN y GND a GND.
 4. Fijar el sensor mirando al frente, sin obstáculos cercanos, para medir contra una superficie plana (una caja o libro).
 
 ## 3. Objeto actuador
@@ -99,10 +99,10 @@ pio device monitor --port COMy -b 115200
 | Consola | Mensajes esperados |
 |---|---|
 | Actuador | `[Actuador] LEDs: verde=25, amarillo=26, rojo=27; apagados.` → `[WiFi] Conectado; IP local: ...` → `[TCP] Registro aceptado (OK).` |
-| Sensor | `[Sensor] HC-SR04: TRIG=5, ECHO=18; intervalo=250 ms.` → `[TCP] Registro aceptado (OK).` → `[Sensor] POST distance=...` cuatro veces por segundo |
+| Sensor | `[Sensor] HC-SR04: TRIG=23, ECHO=18; intervalo=250 ms.` → `[TCP] Registro aceptado (OK).` → `[Sensor] POST distance=...` cuatro veces por segundo |
 | Servidor | `REGISTER actuator aceptado`, `REGISTER sensor aceptado`, y pares `POST` / `SET` |
 
-Con el sistema funcionando: objeto a menos de 50 cm → rojo parpadea rápido (4 Hz); entre 50 y 100 cm → amarillo parpadea lento (2 Hz); 100 cm o más → verde fijo; sin objeto delante → todos apagados.
+Con el sistema funcionando: 0 < d ≤ 5 cm → rojo a 4 Hz; 5 < d ≤ 15 cm → amarillo a 2 Hz; 15 < d ≤ 25 cm → verde a 2 Hz; d > 25 cm → Lejos, los tres LEDs simultáneos a 2 Hz. Un timeout de ECHO o lectura inválida produce todos apagados; una distancia válida lejana continúa en Lejos.
 
 ## 8. Problemas frecuentes
 

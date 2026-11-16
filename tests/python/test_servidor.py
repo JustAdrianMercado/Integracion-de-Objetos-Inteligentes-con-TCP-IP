@@ -8,7 +8,8 @@ from apps.servidor.servidor import ServidorTcp
 APAGADO = "SET redLed=off yellowLed=off greenLed=off"
 ROJO = "SET redLed=blink_4 yellowLed=off greenLed=off"
 AMARILLO = "SET redLed=off yellowLed=blink_2 greenLed=off"
-VERDE = "SET redLed=off yellowLed=off greenLed=on"
+VERDE = "SET redLed=off yellowLed=off greenLed=blink_2"
+LEJOS = "SET redLed=blink_2 yellowLed=blink_2 greenLed=blink_2"
 
 
 class PruebasServidor(unittest.TestCase):
@@ -73,13 +74,15 @@ class PruebasServidor(unittest.TestCase):
     def test_rangos_limites_y_comandos_identicos(self):
         actuador = self.registrar("actuator")
         sensor = self.registrar("sensor")
-        for distancia, esperado in [(45, ROJO), (49.99, ROJO), (50, AMARILLO), (99.99, AMARILLO),
-                                    (100, VERDE), (120, VERDE), (120, VERDE), ("invalid", APAGADO)]:
-            self.post(sensor, actuador, distancia, esperado)
+        for distancia, esperado in [(5, ROJO), (5.01, AMARILLO), (15, AMARILLO),
+                                    (15.01, VERDE), (25, VERDE), (25.01, LEJOS),
+                                    (50, LEJOS), (100, LEJOS), (100, LEJOS), ("invalid", APAGADO)]:
+            with self.subTest(distancia=distancia):
+                self.post(sensor, actuador, distancia, esperado)
 
     def test_actuador_recibe_la_ultima_lectura_reciente(self):
         sensor = self.registrar("sensor")
-        sensor.sendall(b"POST distance=45.00\nPOST distance=120.00\n")
+        sensor.sendall(b"POST distance=5.00\nPOST distance=25.00\n")
         time.sleep(0.1)
         actuador = self.registrar("actuator", VERDE)
         self.sin_datos(actuador)
@@ -87,7 +90,7 @@ class PruebasServidor(unittest.TestCase):
     def test_reconexion_del_actuador_conserva_la_lectura(self):
         sensor = self.registrar("sensor")
         actuador = self.registrar("actuator")
-        self.post(sensor, actuador, 75, AMARILLO)
+        self.post(sensor, actuador, 15, AMARILLO)
         actuador.close()
         time.sleep(0.1)
         self.registrar("actuator", AMARILLO)
@@ -95,7 +98,7 @@ class PruebasServidor(unittest.TestCase):
     def test_desconexion_del_sensor_apaga(self):
         actuador = self.registrar("actuator")
         sensor = self.registrar("sensor")
-        self.post(sensor, actuador, 45, ROJO)
+        self.post(sensor, actuador, 50, LEJOS)
         sensor.close()
         self.assertEqual(self.linea(actuador), APAGADO)
         self.registrar("sensor")  # El rol quedo libre.
@@ -103,7 +106,7 @@ class PruebasServidor(unittest.TestCase):
     def test_sensor_sin_post_durante_2_s_se_cierra_y_apaga(self):
         actuador = self.registrar("actuator")
         sensor = self.registrar("sensor")
-        self.post(sensor, actuador, 120, VERDE)
+        self.post(sensor, actuador, 100, LEJOS)
         inicio = time.monotonic()
         self.assertEqual(self.linea(actuador), APAGADO)
         self.assertGreaterEqual(time.monotonic() - inicio, 1.8)
@@ -122,7 +125,7 @@ class PruebasServidor(unittest.TestCase):
             duplicado = self.conectar()
             duplicado.sendall(f"REGISTER type={rol}\n".encode())
             self.error(duplicado, "role_busy")
-            self.post(sensor, actuador, 100, VERDE)
+            self.post(sensor, actuador, 25, VERDE)
 
     def test_mensaje_antes_del_registro(self):
         for mensaje, motivo in [("POST distance=45.00", "not_registered"), (APAGADO, "not_registered"),
@@ -147,11 +150,11 @@ class PruebasServidor(unittest.TestCase):
     def test_fragmentos_y_varios_mensajes_por_bloque(self):
         actuador = self.registrar("actuator")
         sensor = self.registrar("sensor")
-        for fragmento in (b"POST dis", b"tance=4", b"5.00\nPOST distance=120.00\n"):
+        for fragmento in (b"POST dis", b"tance=5", b".00\nPOST distance=25.01\n"):
             sensor.sendall(fragmento)
             time.sleep(0.05)
         self.assertEqual(self.linea(actuador), ROJO)
-        self.assertEqual(self.linea(actuador), VERDE)
+        self.assertEqual(self.linea(actuador), LEJOS)
 
     def test_linea_larga_cr_y_nul(self):
         for bloque in (b"x" * 128 + b"\n", b"OK\r\n", b"OK\0\n"):

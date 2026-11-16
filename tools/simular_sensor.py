@@ -83,7 +83,7 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Publica distancias como el ESP32 sensor, sin placa.")
     parser.add_argument("--ip", default="127.0.0.1", help="IPv4 o nombre de la PC servidor")
     parser.add_argument("--puerto", type=puerto_valido, default=5000)
-    parser.add_argument("--distancias", default="45,75,120,invalid",
+    parser.add_argument("--distancias", default="5,15,25,50,invalid",
                         help="Lista separada por comas, en cm o invalid; se recorre en ciclo")
     parser.add_argument("--duracion", type=float, default=3.0,
                         help="Segundos que se repite cada distancia, un POST cada 250 ms")

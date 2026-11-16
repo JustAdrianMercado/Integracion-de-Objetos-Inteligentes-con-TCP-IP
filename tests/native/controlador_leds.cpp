@@ -120,6 +120,54 @@ int main() {
         leds.actualizar(1250);
         comprobar(red.escriturasPin == escrituras + 1, "Tras resincronizar se retoma el intervalo normal");
     }
+    {
+        // Entrar al parpadeo conjunto desde cualquier rango, incluso con otro LED ya en blink_2.
+        const ComandoLeds anteriores[] = {comando(off, off, off), comando(b4, off, off),
+                                         comando(off, b2, off), comando(off, off, b2)};
+        for (const ComandoLeds& anterior : anteriores) {
+            red = RedSimulada{};
+            ControladorLeds leds(VERDE, AMARILLO, ROJO);
+            leds.iniciar();
+            leds.establecerEstados(anterior);
+            leds.actualizar(0);
+            leds.actualizar(250);
+            leds.establecerEstados(comando(b2, b2, b2));
+            leds.actualizar(300);
+            comprobar(niveles(HIGH, HIGH, HIGH), "Lejos sincroniza los tres al entrar desde cualquier rango");
+            leds.actualizar(549);
+            comprobar(niveles(HIGH, HIGH, HIGH), "Lejos conserva 250 ms encendido");
+            leds.establecerEstados(comando(b2, b2, b2));
+            leds.actualizar(550);
+            comprobar(niveles(LOW, LOW, LOW), "Lejos alterna junto sin reiniciar por SET identico");
+
+            bool sincronizados = true;
+            int cambios = 0;
+            int nivelAnterior = LOW;
+            for (uint32_t tiempo = 551; tiempo <= 2550; ++tiempo) {
+                if ((tiempo - 550) % 250 == 0) { leds.establecerEstados(comando(b2, b2, b2)); }
+                leds.actualizar(tiempo);
+                sincronizados = sincronizados && niveles(red.niveles[ROJO], red.niveles[ROJO], red.niveles[ROJO]);
+                if (red.niveles[ROJO] != nivelAnterior) { ++cambios; nivelAnterior = red.niveles[ROJO]; }
+            }
+            comprobar(sincronizados && cambios == 8, "Lejos mantiene fase comun y dos ciclos por segundo");
+            leds.establecerEstados(comando(off, off, b2));
+            leds.actualizar(2551);
+            comprobar(niveles(LOW, LOW, LOW), "Al volver a verde, su modo repetido conserva la fase");
+            leds.actualizar(2800);
+            comprobar(niveles(LOW, LOW, HIGH), "Verde conserva su alternancia al salir de Lejos");
+            leds.establecerEstados(comando(b2, b2, b2));
+            leds.actualizar(2850);
+            leds.establecerEstados(comando(off, off, off));
+            leds.actualizar(2851);
+            comprobar(niveles(LOW, LOW, LOW), "SET apagado cancela Lejos ante lectura invalida");
+            leds.establecerEstados(comando(b2, b2, b2));
+            leds.actualizar(2900);
+            leds.apagarTodos();
+            uint32_t reloj = 2900;
+            comprobar(niveles(LOW, LOW, LOW) && alternancias(leds, ROJO, reloj, 1000) == 0 &&
+                      niveles(LOW, LOW, LOW), "Apagado de seguridad cancela todo parpadeo de Lejos");
+        }
+    }
     std::cout << total - fallos << " de " << total << " comprobaciones del controlador de LEDs aprobadas.\n";
     return fallos == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }

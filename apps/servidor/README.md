@@ -37,6 +37,20 @@ Con `0.0.0.0` la consola muestra las IPv4 de la PC para configurar `IP_SERVIDOR`
 - La desconexión o el rechazo del sensor apaga los LEDs. La desconexión del actuador conserva la lectura para su siguiente registro.
 - Si el envío al actuador falla o queda bloqueado más de 2 s, se cierra su conexión y se libera el rol.
 
+## Rangos de control
+
+La clasificación permanece exclusivamente en `ControlDistancia` Python. Los límites superiores pertenecen al rango anterior; no existen solapamientos.
+
+| Distancia (cm) | Estado | Comando generado |
+|---|---|---|
+| Inválida o timeout de ECHO | Inválido | `SET redLed=off yellowLed=off greenLed=off` |
+| 0 < d ≤ 5 | Rojo | `SET redLed=blink_4 yellowLed=off greenLed=off` |
+| 5 < d ≤ 15 | Amarillo | `SET redLed=off yellowLed=blink_2 greenLed=off` |
+| 15 < d ≤ 25 | Verde | `SET redLed=off yellowLed=off greenLed=blink_2` |
+| d > 25 | Lejos | `SET redLed=blink_2 yellowLed=blink_2 greenLed=blink_2` |
+
+Las líneas se transmiten con LF. El actuador sincroniza los tres parpadeos al entrar en el comando conjunto y conserva la fase al repetirlo. El protocolo sigue admitiendo `on`, aunque estos rangos ya no lo generan. Un timeout de ECHO se comunica como `invalid`; la desconexión del sensor y los plazos de seguridad mantienen el apagado existente.
+
 ## Errores
 
 | Situación | Respuesta |

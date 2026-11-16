@@ -31,20 +31,21 @@ Procedimiento para validar el sistema montado y registrar las evidencias que pid
 
 ## PF-01 — Rangos y límites (RF2, RF3; casos PV-01 a PV-03)
 
-Colocar el objeto a cada distancia y anotar la lectura de la consola del sensor y el LED observado. Cerca de 50 y 100 cm la lectura física varía unos milímetros: el límite exacto ya se verifica en `test_servidor`; aquí se comprueba el comportamiento a cada lado.
+Colocar el objeto a cada distancia y anotar la lectura de la consola del sensor y el LED observado. Cerca de 5, 15 y 25 cm la lectura física varía unos milímetros: el límite exacto ya se verifica en `test_servidor`; aquí se comprueba el comportamiento a cada lado.
 
 | Referencia (cm) | Lectura del sensor (cm) | Esperado | LED observado | ¿Cumple? |
 |---:|---:|---|---|---|
-| 20 | | Rojo 4 Hz | | |
-| 45 | | Rojo 4 Hz | | |
-| 48 | | Rojo 4 Hz | | |
-| 52 | | Amarillo 2 Hz | | |
-| 75 | | Amarillo 2 Hz | | |
-| 98 | | Amarillo 2 Hz | | |
-| 102 | | Verde fijo | | |
-| 130 | | Verde fijo | | |
+| 3 | | Rojo 4 Hz | | |
+| 5 | | Rojo 4 Hz | | |
+| 5.01 | | Amarillo 2 Hz | | |
+| 15 | | Amarillo 2 Hz | | |
+| 15.01 | | Verde 2 Hz | | |
+| 25 | | Verde 2 Hz | | |
+| 25.01 | | Lejos: tres LEDs simultáneos a 2 Hz | | |
+| 50 | | Lejos: tres LEDs simultáneos a 2 Hz | | |
+| 100 | | Lejos: tres LEDs simultáneos a 2 Hz | | |
 
-Evidencia: fotos o un video corto por rango (`pf01-rojo.jpg`, `pf01-amarillo.jpg`, `pf01-verde.jpg`).
+Evidencia: fotos o un video corto por rango (`pf01-rojo.jpg`, `pf01-amarillo.jpg`, `pf01-verde.jpg`, `pf01-lejos.jpg`). Los valores centesimales verifican la frontera lógica con entradas controladas; la precisión física del HC-SR04 no permite presuponer esa resolución.
 
 ## PF-02 — Lectura inválida (PV-04)
 
@@ -63,12 +64,16 @@ Grabar 10 s de cada modo y contar los encendidos.
 |---|---:|---:|---|---|
 | Rojo `blink_4` | | | 4 Hz (40 encendidos) | |
 | Amarillo `blink_2` | | | 2 Hz (20 encendidos) | |
+| Verde `blink_2` | | | 2 Hz (20 encendidos) | |
+| Lejos: tres `blink_2` | | | 2 Hz por LED (20 encendidos), en fase | |
+
+Verificar la entrada en Lejos desde rojo, amarillo y verde; mantener comandos repetidos y comprobar que los tres LEDs alternan juntos. Luego provocar una lectura inválida y confirmar el apagado. El apagado por ausencia de comandos continúa usando el plazo existente de 2000 ms.
 
 ## PF-04 — Desconexión y recuperación (PV-13 a PV-15)
 
 | Prueba | Esperado | Observado | ¿Cumple? |
 |---|---|---|---|
-| Desconectar el USB del sensor con un LED activo | El actuador apaga en ≤ 2 s. | | |
+| Desconectar el USB del sensor desde Lejos | El actuador apaga en ≤ 2 s. | | |
 | Volver a conectar el sensor | Se registra solo y los LEDs vuelven a responder. | | |
 | Detener el servidor (`Ctrl+C`) y volver a iniciarlo | Ambas placas reintentan cada 2 s y se registran de nuevo. | | |
 | Apagar el WiFi (hotspot) unos segundos y encenderlo | Los LEDs se apagan; las placas se reconectan y el sistema continúa. | | |
