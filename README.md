@@ -7,9 +7,11 @@ ESP32 sensor --POST distance=5.00--> PC servidor --SET redLed=blink_4 ...--> ESP
 (HC-SR04)                             (reglas de rango)                      (3 LEDs)
 ```
 
-El sensor publica una medición cada 250 ms. El servidor la clasifica (rojo 4 Hz para 0 < d <= 5 cm, amarillo 2 Hz para 5 < d <= 15 cm, verde 2 Hz para 15 < d <= 25 cm y Lejos con los tres LEDs sincronizados a 2 Hz para d > 25 cm) y envía el comando al actuador, que lo aplica a los tres LEDs. El equipo confirma el funcionamiento integrado con ambas placas; las mediciones y evidencias de la etapa 7 siguen pendientes de incorporación.
+El sensor publica una medición cada 250 ms. El servidor la clasifica (rojo 4 Hz para 0 < d <= 5 cm, amarillo 2 Hz para 5 < d <= 15 cm, verde 2 Hz para 15 < d <= 25 cm y Lejos con los tres LEDs sincronizados a 2 Hz para d > 25 cm) y envía el comando al actuador, que lo aplica a los tres LEDs. Una lectura inválida o la ausencia del sensor apaga los tres LEDs.
 
-Montaje definitivo: sensor con Micro-USB, TRIG en GPIO23 (D23) y ECHO en GPIO18 (D18) mediante tres resistencias de 2.2 kΩ; actuador con USB-C y LEDs verde/amarillo/rojo en GPIO25/26/27.
+Las mediciones, fotografías y el video del sistema funcionando están en [docs/evidencias](docs/evidencias/README.md), y el análisis completo en el [informe](INFORME.md).
+
+Montaje: sensor con Micro-USB, TRIG en GPIO23 (D23) y ECHO en GPIO18 (D18) mediante tres resistencias de 2.2 kΩ; actuador con USB-C y LEDs verde/amarillo/rojo en GPIO25/26/27.
 
 ## Estructura
 
@@ -25,10 +27,10 @@ tools/                      Simuladores sin placas y analizar_registro.py (evide
 tests/
   native/                   Pruebas C++ del firmware con WiFi, reloj y GPIO simulados
   python/                   Pruebas del protocolo, el servidor y los simuladores
-docs/                       Diseño, diagramas, plan, consigna y evidencias
+docs/                       Diseño, diagramas, consigna, guías y evidencias
 platformio.ini              Entornos sensor y actuador
 CMakeLists.txt              Pruebas en la PC (CTest)
-INFORME.md                  Informe académico, trabajado por separado
+INFORME.md                  Informe técnico de la práctica
 ```
 
 ## Ejecutar
@@ -80,14 +82,8 @@ ctest --test-dir build/windows --output-on-failure
 | Servidor | Python 3.13, solo biblioteca estándar. |
 | Pruebas | `unittest`; CMake + CTest con MSVC o g++. |
 
-## Etapas
+## Documentación
 
-1. Estados y reglas de distancia.
-2. Organización del repositorio.
-3. Protocolo de aplicación.
-4. Servidor TCP (Python).
-5. Cliente ESP32 sensor.
-6. Cliente ESP32 actuador, más la auditoría y la simplificación del código.
-7. **En curso:** documentación de evidencias y mediciones con ambas placas; montaje e integración funcional confirmados por el equipo ([guía](docs/GUIA_MONTAJE.md) y [pruebas](docs/PRUEBAS_FISICAS.md)).
-
-El [plan de implementación](docs/PLAN_IMPLEMENTACION.md) detalla cada entrega y el [diseño del sistema](docs/diagramas/Diseno_del_sistema.md) contiene el protocolo y los diagramas. `INFORME.md` y la documentación histórica quedan a cargo del compañero que redacta el informe.
+- [Diseño del sistema](docs/diagramas/Diseno_del_sistema.md): arquitectura, clases, secuencias y protocolo.
+- [Guía de montaje](docs/GUIA_MONTAJE.md) y [pruebas físicas](docs/PRUEBAS_FISICAS.md): cómo armar el sistema y repetir los ensayos.
+- [Evidencias](docs/evidencias/README.md): registro de pruebas, fotografías, video y salidas de las pruebas automatizadas.

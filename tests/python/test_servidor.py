@@ -3,6 +3,7 @@ import threading
 import time
 import unittest
 
+from apps.servidor.protocolo import TipoCliente
 from apps.servidor.servidor import ServidorTcp
 
 APAGADO = "SET redLed=off yellowLed=off greenLed=off"
@@ -180,3 +181,48 @@ class PruebasServidor(unittest.TestCase):
     def test_puerto_ocupado(self):
         with self.assertRaises(OSError):
             ServidorTcp(self.servidor.server_address)
+
+    def test_fragmentos_sin_lf_no_prolongan_el_registro(self):
+        cliente = self.conectar()
+        inicio = time.monotonic()
+        for fragmento in (b"REG", b"IST", b"ER "):
+            cliente.sendall(fragmento)
+            time.sleep(0.6)
+        # Con un plazo por cada recv la sesion duraria hasta 1.2 + 2 = 3.2 s.
+        self.assertEqual(self.linea(cliente), "ERROR reason=not_registered")
+        self.assertLess(time.monotonic() - inicio, 2.7)
+        self.cerrado(cliente)
+
+    def test_fragmentos_sin_lf_no_prolongan_la_sesion_del_sensor(self):
+        actuador = self.registrar("actuator")
+        sensor = self.registrar("sensor")
+        self.post(sensor, actuador, 100, LEJOS)
+        inicio = time.monotonic()
+        for fragmento in (b"POST", b" dist", b"ance="):
+            sensor.sendall(fragmento)
+            time.sleep(0.6)
+        self.assertEqual(self.linea(actuador), APAGADO)
+        self.assertGreaterEqual(time.monotonic() - inicio, 1.8)
+        self.assertLess(time.monotonic() - inicio, 2.7)
+        self.cerrado(sensor)
+
+    def test_envio_lento_al_actuador_no_bloquea_el_estado(self):
+        actuador = self.registrar("actuator")
+        sensor = self.registrar("sensor")
+        en_servidor = self.servidor.estado.roles[TipoCliente.ACTUADOR]
+        vaciar = en_servidor.vaciar
+
+        def vaciar_lento():
+            time.sleep(1.0)
+            vaciar()
+
+        en_servidor.vaciar = vaciar_lento
+        sensor.sendall(b"POST distance=5.00\n")
+        time.sleep(0.1)  # El hilo del sensor ya esta enviando al actuador.
+        inicio = time.monotonic()
+        duplicado = self.conectar()
+        duplicado.sendall(b"REGISTER type=sensor\n")
+        # El registro necesita el lock del estado; no debe esperar al envio lento.
+        self.assertEqual(self.linea(duplicado), "ERROR reason=role_busy")
+        self.assertLess(time.monotonic() - inicio, 0.5)
+        self.assertEqual(self.linea(actuador), ROJO)

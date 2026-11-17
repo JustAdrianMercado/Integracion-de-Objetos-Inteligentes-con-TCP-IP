@@ -1,0 +1,63 @@
+name: Pruebas
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  pruebas:
+    name: Pruebas nativas C++ y servidor Python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Compilar las pruebas nativas
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build --parallel
+
+      # CTest corre las seis suites C++ y, al encontrar Python 3.13, tambien unittest.
+      - name: Ejecutar CTest
+        run: |
+          {
+            echo "Commit: $GITHUB_SHA"
+            echo "Fecha (UTC): $(date -u '+%Y-%m-%d %H:%M:%S')"
+            echo "Compilador: $(c++ --version | head -n 1)"
+            echo "Python: $(python --version)"
+            echo
+          } > ctest.txt
+          set -o pipefail
+          ctest --test-dir build --output-on-failure -V 2>&1 | tee -a ctest.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: resultados-pruebas
+          path: ctest.txt
+
+  firmware:
+    name: Compilar firmware ESP32
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: platformio-${{ hashFiles('platformio.ini') }}
+
+      - name: Instalar PlatformIO
+        run: pip install platformio
+
+      # Sin ConfiguracionRed.h se usa el ejemplo, que deja la red deshabilitada.
+      - name: Compilar sensor y actuador
+        run: pio run -e sensor -e actuador

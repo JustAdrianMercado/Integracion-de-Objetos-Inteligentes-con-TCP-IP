@@ -1,4 +1,4 @@
-# Guía de montaje e integración — etapa 7
+# Guía de montaje e integración
 
 Pasos para montar los dos objetos inteligentes, conectarlos a la PC, cargar el firmware y poner en marcha el sistema completo. Las pruebas y la forma de registrar evidencias están en [PRUEBAS_FISICAS.md](PRUEBAS_FISICAS.md).
 
@@ -57,7 +57,7 @@ Esquema: [circuito-actuador.svg](diagramas/circuito-actuador.svg) y [diseño §3
 2. Iniciar el servidor guardando el registro para las evidencias:
 
    ```powershell
-   py -3.13 -m apps.servidor --ip 0.0.0.0 --puerto 5000 --registro docs/evidencias/p2/servidor.log
+   py -3.13 -m apps.servidor --ip 0.0.0.0 --puerto 5000 --registro docs/evidencias/servidor.log
    ```
 
    La consola muestra `IPv4 de esta PC para IP_SERVIDOR: ...`. Usar la del adaptador WiFi (no la de adaptadores virtuales como `vEthernet` 172.x).

@@ -1,6 +1,8 @@
 """Servidor TCP: un hilo por conexion, un sensor y un actuador, reglas de distancia en la PC."""
 
+import collections
 import logging
+import select
 import socket
 import socketserver
 import threading
@@ -18,16 +20,33 @@ PLAZO = 2.0
 
 
 class Cliente:
-    """Una conexion aceptada. El lock evita mezclar lineas enviadas desde dos hilos."""
+    """Una conexion aceptada con su cola de lineas por enviar.
+
+    Las lineas se encolan mientras se modifica el estado compartido y se envian despues,
+    fuera de ese lock. Asi un cliente lento solo demora al hilo que le escribe y no
+    bloquea registros ni lecturas de los demas.
+    """
 
     def __init__(self, conexion: socket.socket):
         self.conexion = conexion
         self.rol = None
-        self._lock = threading.Lock()
+        self._pendientes = collections.deque()
+        self._lock_envio = threading.Lock()
+
+    def encolar(self, linea: str):
+        self._pendientes.append(codificar(linea))
+
+    def vaciar(self):
+        """Envia en orden todo lo encolado. Lanza OSError si la conexion falla."""
+        # Un solo hilo envia a la vez y siempre en orden de llegada a la cola, por lo
+        # que dos hilos que escriben al mismo cliente no mezclan ni invierten lineas.
+        with self._lock_envio:
+            while self._pendientes:
+                self.conexion.sendall(self._pendientes.popleft())
 
     def enviar(self, linea: str):
-        with self._lock:
-            self.conexion.sendall(codificar(linea))
+        self.encolar(linea)
+        self.vaciar()
 
     def cortar(self):
         try:
@@ -37,7 +56,11 @@ class Cliente:
 
 
 class EstadoSistema:
-    """Roles registrados y ultima lectura, compartidos por todos los hilos."""
+    """Roles registrados y ultima lectura, compartidos por todos los hilos.
+
+    Los metodos cambian el estado y encolan los mensajes con el lock tomado; los envios
+    se hacen despues de soltarlo.
+    """
 
     def __init__(self):
         self.lock = threading.Lock()
@@ -51,21 +74,26 @@ class EstadoSistema:
                 return False
             self.roles[rol] = cliente
             cliente.rol = rol
-            cliente.enviar("OK")
+            # OK y el SET inicial se encolan junto con el registro: ningun SET posterior
+            # puede llegar al actuador antes que ellos.
+            cliente.encolar("OK")
             if rol == TipoCliente.ACTUADOR:
                 # El actuador recibe el estado actual si la lectura es reciente; si no, apagado.
                 reciente = (self.ultima_lectura is not None
                             and time.monotonic() - self.ultima_lectura < PLAZO)
                 self._actuar(self.ultimo_comando if reciente else ComandoLeds())
-            return True
+        cliente.vaciar()
+        return True
 
     def nueva_lectura(self, distancia: float):
         with self.lock:
             self.ultima_lectura = time.monotonic()
             self.ultimo_comando = ControlDistancia.calcular_comando(distancia)
-            self._actuar(self.ultimo_comando)
+            actuador = self._actuar(self.ultimo_comando)
+        self._entregar(actuador)
 
     def liberar(self, cliente: Cliente):
+        actuador = None
         with self.lock:
             if cliente.rol is None or self.roles.get(cliente.rol) is not cliente:
                 return
@@ -74,44 +102,62 @@ class EstadoSistema:
                 # Sin sensor no hay datos validos: se apagan los LEDs.
                 self.ultima_lectura = None
                 self.ultimo_comando = ComandoLeds()
-                self._actuar(self.ultimo_comando)
+                actuador = self._actuar(self.ultimo_comando)
             cliente.rol = None
+        self._entregar(actuador)
 
     def _actuar(self, comando: ComandoLeds):
-        """Envia un SET al actuador registrado. Se llama con el lock tomado."""
+        """Encola un SET para el actuador registrado y lo devuelve. Requiere el lock."""
         actuador = self.roles.get(TipoCliente.ACTUADOR)
         if actuador is None:
-            return
+            return None
         linea = crear_comando(comando)
+        actuador.encolar(linea)
+        LOG.info("%s", linea)
+        return actuador
+
+    def _entregar(self, actuador):
+        """Envia lo encolado al actuador, ya sin el lock tomado."""
+        if actuador is None:
+            return
         try:
-            actuador.enviar(linea)
-            LOG.info("%s", linea)
+            actuador.vaciar()
         except OSError:
             # Actuador desconectado o sin leer durante PLAZO: se libera su rol.
             LOG.warning("No se pudo enviar al actuador; cerrando su conexion")
-            del self.roles[TipoCliente.ACTUADOR]
-            actuador.rol = None
+            with self.lock:
+                if self.roles.get(TipoCliente.ACTUADOR) is actuador:
+                    del self.roles[TipoCliente.ACTUADOR]
+                    actuador.rol = None
             actuador.cortar()
 
 
 class ManejadorConexion(socketserver.BaseRequestHandler):
     def handle(self):
         self.cliente = Cliente(self.request)
+        # El timeout del socket limita los envios; la recepcion usa el plazo de abajo.
         self.request.settimeout(PLAZO)
         self.server.agregar(self.cliente)
         receptor = ReceptorLineas()
+        # 2000 ms desde la apertura o desde la ultima linea completa. Los fragmentos sin
+        # LF no lo renuevan, asi que no pueden mantener abierta una sesion sin mensajes.
+        limite = time.monotonic() + PLAZO
         try:
             while not self.server.cerrando:
-                try:
-                    bloque = self.request.recv(128)
-                except TimeoutError:
+                if self.cliente.rol == TipoCliente.ACTUADOR:
+                    espera = PLAZO  # El actuador solo recibe; su silencio es normal.
+                else:
+                    espera = limite - time.monotonic()
+                listo = espera > 0 and select.select([self.request], [], [], espera)[0]
+                if not listo:
                     if self.cliente.rol == TipoCliente.ACTUADOR:
-                        continue  # El actuador solo recibe; su silencio es normal.
+                        continue
                     if self.cliente.rol is None:
                         self.cerrar_con_error(MotivoError.NO_REGISTRADO)
                     else:
                         LOG.info("2000 ms sin POST; cerrando sensor")
                     return
+                bloque = self.request.recv(128)
                 if not bloque:
                     return
                 for linea in receptor.agregar(bloque):
@@ -119,6 +165,7 @@ class ManejadorConexion(socketserver.BaseRequestHandler):
                     if motivo is not None:
                         self.cerrar_con_error(motivo)
                         return
+                    limite = time.monotonic() + PLAZO
         except MensajeInvalido:
             self.cerrar_con_error(MotivoError.MENSAJE_INVALIDO)
         except OSError:

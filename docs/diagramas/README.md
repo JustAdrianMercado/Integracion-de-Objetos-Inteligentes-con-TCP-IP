@@ -1,18 +1,10 @@
 # Diagramas del proyecto
 
-## Práctica 2 — Diseño del sistema
-
-El documento [`Diseno_del_sistema.md`](Diseno_del_sistema.md) contiene nuestro diseño: el diagrama de arquitectura, el diagrama de clases, las secuencias de mensajes y la especificación del protocolo de aplicación. Define dos clientes ESP32 con firmware C++ y un servidor TCP Python. El [plan revisado](../PLAN_IMPLEMENTACION.md) recoge la migración de arquitectura y las siguientes etapas.
+El documento [`Diseno_del_sistema.md`](Diseno_del_sistema.md) contiene nuestro diseño: el diagrama de arquitectura, el diagrama de clases, las secuencias de mensajes y la especificación del protocolo de aplicación. Define dos clientes ESP32 con firmware C++ y un servidor TCP Python.
 
 Los circuitos de los objetos inteligentes están disponibles por separado:
 
 - [`circuito-sensor.svg`](circuito-sensor.svg): ESP32, HC-SR04 y divisor de voltaje de ECHO.
 - [`circuito-actuador.svg`](circuito-actuador.svg): ESP32 y tres LEDs con sus resistencias.
 
-Los diagramas Mermaid se mantienen dentro del documento Markdown. Los esquemas SVG pueden abrirse en un navegador y utilizarse como imágenes en el informe. El [enunciado original del docente](../consigna/Práctica_2.md) se conserva en `docs/consigna`; este documento describe el diseño previo a la implementación.
-
-## Práctica 1 — Referencia
-
-Los diagramas originales de arquitectura, circuito, estructura y comportamiento se conservan en la sección **Análisis y Diseño** de [`INFORME_P1.md`](../historico/INFORME_P1.md).
-
-El esquema del montaje original, que reúne el sensor y los LEDs en un solo ESP32, permanece en [`circuito.svg`](circuito.svg).
+Los diagramas Mermaid se mantienen dentro del documento Markdown. Los esquemas SVG pueden abrirse en un navegador y se usan como imágenes en el informe. El [enunciado del docente](../consigna/Práctica_2.md) está en `docs/consigna`.

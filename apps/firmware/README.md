@@ -81,7 +81,7 @@ El monitor trabaja a 115200 baudios.
 - **Sensor:** GPIO23 (D23) para TRIG y GPIO18 (D18) para ECHO, pulso de 10 µs y espera máxima de 30000 µs. ECHO se conecta mediante el divisor a 3.3 V del [circuito del sensor](../../docs/diagramas/Diseno_del_sistema.md#31-objeto-inteligente-con-sensor).
 - **Actuador:** verde en GPIO 25, amarillo en GPIO 26 y rojo en GPIO 27, cada uno con su resistencia de 220 Ω a GND.
 
-La guía completa de cableado y las comprobaciones con ambas placas pertenecen a la etapa 7.
+La guía completa de cableado y puesta en marcha está en [GUIA_MONTAJE.md](../../docs/GUIA_MONTAJE.md).
 
 ## Servidor y simuladores de consola
 
@@ -134,4 +134,4 @@ En la consola de cada ESP32 se verán intentos WiFi/TCP, `Registro aceptado (OK)
 
 Las [pruebas nativas](../../tests/native) compilan este mismo código en la PC con WiFi, sockets, reloj y GPIO simulados (`tests/native/fakes`). Verifican el protocolo, el receptor de líneas, `ClienteTcp` (registro, reintentos, envíos parciales, errores y plazos), ambos principales (cadencia, `SET` fragmentado, plazo de 2 s, desconexiones) y `ControladorLeds` (estados, frecuencias, fase y desbordamiento de `millis()`). Se ejecutan con CTest; ver la [sección de pruebas](../../README.md#pruebas).
 
-La compilación y las simulaciones están verificadas. La asociación WiFi, la consola serie, las medidas y el parpadeo sobre las placas reales quedan por comprobar con el montaje (etapa 7).
+El funcionamiento sobre las placas reales (WiFi, consola serie, medidas y parpadeo) está documentado en las [evidencias](../../docs/evidencias/README.md) y en el [informe](../../INFORME.md), sección 4.
