@@ -10,7 +10,7 @@
 
 **Plataformas del proyecto:** firmware para dos ESP32 / ESP-WROOM-32 y servidor para una PC Windows
 
-**Estado del proyecto:** componentes implementados; montaje e integración funcional con ambos ESP32 y servidor Python confirmados por el equipo; evidencias y mediciones físicas pendientes de incorporación
+**Estado del proyecto:** prototipo distribuido operativo; pruebas físicas, fotografías y resultados RF/RNF integrados. Revisión final: 17/11/2026. El alcance de cada conclusión se delimita en §4 y §5.
 
 ## Introducción
 
@@ -18,11 +18,9 @@ La [consigna de la Práctica 2](docs/consigna/Práctica_2.md) exige integrar un 
 
 El proyecto dispone de dos programas ESP32 independientes: [PrincipalSensor.cpp](apps/firmware/src/PrincipalSensor.cpp) adquiere y publica la distancia, y [PrincipalActuador.cpp](apps/firmware/src/PrincipalActuador.cpp) recibe órdenes y controla los LEDs. Ambos utilizan [ClienteTcp](apps/firmware/src/ClienteTcp.cpp) para la conexión WiFi/TCP y el registro. La biblioteca C++ común, ubicada en [apps/firmware/lib/Compartido/](apps/firmware/lib/Compartido/), reúne los tipos, el protocolo y el receptor de líneas. El [servidor TCP Python](apps/servidor/servidor.py) concentra la recepción, clasificación y generación de comandos. La estructura vigente corresponde a la simplificación descrita en el [plan de implementación](docs/PLAN_IMPLEMENTACION.md#simplificación-del-código).
 
-Existen [pruebas automatizadas C++](tests/native/) con hardware y red simulados y [pruebas Python](tests/python/) del dominio, protocolo, servidor y simuladores. El [resumen del equipo](docs/RESUMEN_PARA_INFORME.md) informa ejecuciones previas; su incorporación como resultados requiere registros verificables asociados a la versión evaluada. Las ejecuciones automatizadas locales se distinguen de la validación física. El equipo confirma el montaje conjunto y el funcionamiento integrado de ambos ESP32 con el servidor Python. Las fotografías, registros y mediciones físicas aún deben incorporarse para acreditar documentalmente los criterios de aceptación, conforme a la [guía de montaje](docs/GUIA_MONTAJE.md) y las [pruebas físicas](docs/PRUEBAS_FISICAS.md).
+La validación reúne pruebas automatizadas y resultados físicos del equipo. El [registro de pruebas de seis páginas](<docs/evidencias/Registro de Pruebas RF y RFN.pdf>), las fotografías y el [video de LEDs](docs/evidencias/leds.mp4) documentan medición, clasificación, actuación y comunicación, además de estabilidad, exactitud, respuesta y frecuencia de lecturas. Se distingue entre valores medidos, observaciones visuales y escenarios controlados de software.
 
-Los resultados de la Práctica 1 se conservan en [INFORME_P1.md](docs/historico/INFORME_P1.md) como referencia de organización y profundidad; no acreditan el funcionamiento del sistema distribuido de la Práctica 2. El informe describe la implementación vigente y mantiene explícitas las discrepancias y validaciones aún pendientes.
-
-Los marcadores indican información por incorporar: `[PENDIENTE DE IMPLEMENTACIÓN]` para desarrollo y revisión del código, `[PENDIENTE DE MEDICIÓN]` para datos experimentales y `[PENDIENTE DE EVIDENCIA]` para registros verificables. Un resultado esperado es un criterio de prueba, no un resultado obtenido.
+El informe conserva el diseño y los fragmentos de código válidos, actualiza el montaje definitivo y relaciona cada requisito con su implementación y evidencia. Los resultados de P1 se mantienen como referencia histórica en [INFORME_P1.md](docs/historico/INFORME_P1.md), sin utilizarlos para acreditar P2. Las limitaciones de cobertura y método se expresan como parte del análisis, no como resultados supuestos.
 
 ## Objetivo general
 
@@ -30,24 +28,24 @@ Diseñar, implementar y validar un sistema distribuido que mida distancias con u
 
 ## 1. Requerimientos Funcionales y No Funcionales
 
-Esta sección establece las condiciones que deberá satisfacer el sistema distribuido. Los requerimientos funcionales RF1–RF4 mantienen la numeración y el alcance de la [consigna oficial](docs/consigna/Práctica_2.md); los criterios de aceptación concretan las decisiones del [diseño del equipo](docs/diagramas/Diseno_del_sistema.md). Los requerimientos no funcionales RNF1–RNF5 declaran los atributos de calidad y sus métodos de verificación.
+Esta sección establece las condiciones utilizadas para evaluar el sistema distribuido. Los requerimientos funcionales RF1–RF4 mantienen la numeración y el alcance de la [consigna oficial](docs/consigna/Práctica_2.md); los criterios de aceptación concretan las decisiones del [diseño del equipo](docs/diagramas/Diseno_del_sistema.md). Los requerimientos no funcionales RNF1–RNF5 declaran los atributos de calidad y sus métodos de verificación.
 
-La adquisición y el envío de distancia corresponden al ESP32 sensor; la recepción, clasificación y generación de comandos corresponden al servidor TCP en la PC; la recepción y ejecución de esos comandos corresponden al ESP32 actuador. Esta distribución sitúa el algoritmo de control en el servidor, conforme a la consigna. Los dos programas ESP32, su cliente de red compartido y el servidor Python están implementados. Los estados siguientes identifican el código disponible; ningún requisito se declara plenamente validado sin las evidencias correspondientes.
+La adquisición y el envío de distancia corresponden al ESP32 sensor; la recepción, clasificación y generación de comandos corresponden al servidor TCP en la PC; la recepción y ejecución de esos comandos corresponden al ESP32 actuador. Esta distribución sitúa el algoritmo de control en el servidor, conforme a la consigna. Los dos programas ESP32, su cliente de red compartido y el servidor Python están implementados. Los estados siguientes remiten a los resultados y al alcance de la validación documentados en §4 y §5.
 
 ### 1.1 Requerimientos funcionales y criterios de aceptación
 
 | ID | Funcionalidad requerida | Criterio de aceptación | Componente responsable | Estado de implementación |
 |---|---|---|---|---|
-| RF1 | Medir la distancia entre el sensor ultrasónico HC-SR04 y un objeto. | Obtener lecturas finitas positivas expresadas en centímetros y contrastarlas con una referencia física mediante PN-02. Ante timeout de ECHO o valor no válido, identificar la lectura como inválida, según PV-04; la tolerancia de medición se evalúa en RNF2. | ESP32 sensor: [SensorUltrasonico](apps/firmware/src/SensorUltrasonico.cpp) adquiere la distancia; [PrincipalSensor.cpp](apps/firmware/src/PrincipalSensor.cpp) planifica la adquisición y publicación mediante `ClienteTcp`. | Adquisición y publicación periódica implementadas. Exactitud y frecuencia físicas: [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA]. |
-| RF2 | Interpretar cada distancia válida y clasificarla en cuatro rangos contiguos y sin solapamiento. | Asignar cada distancia finita positiva a exactamente un rango de §1.2. Las entradas de PV-01 a PV-03, incluidos 5, 5.01, 15, 15.01, 25, 25.01, 50 y 100 cm, deben producir la clasificación prevista y el comando correspondiente. | PC: `ControlDistancia.calcular_comando()` de [dominio.py](apps/servidor/dominio.py), invocado por `EstadoSistema.nueva_lectura()` tras el procesamiento de `POST` en `ManejadorConexion.procesar()`. | Clasificación centralizada implementada exclusivamente en Python; no existe `ControlDistancia` C++. Validación del recorrido con ambas placas: [PENDIENTE DE EVIDENCIA]. |
-| RF3 | Activar los tres LEDs del objeto actuador en función del rango, con un comportamiento distinto por rango. | Aplicar el comando completo según §1.2: rojo a 4 Hz, amarillo o verde a 2 Hz con los demás LEDs apagados, o Lejos con los tres simultáneos a 2 Hz; una lectura inválida debe producir todos apagados. Verificar estos estados mediante PV-01 a PV-04 y la continuidad de fase ante comandos idénticos mediante PV-05. | PC: generación de `ComandoLeds` y `SET`; ESP32 actuador: [PrincipalActuador.cpp](apps/firmware/src/PrincipalActuador.cpp) entrega los estados recibidos a [ControladorLeds](apps/firmware/src/ControladorLeds.cpp). | Recepción, ejecución de `ComandoLeds`, parpadeos y conservación de fase implementados. Actuación física y tiempos reales: [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA]. |
-| RF4 | Enviar lecturas desde el objeto sensor al servidor y comandos desde el servidor al objeto actuador mediante sockets TCP sobre WiFi (IEEE 802.11), utilizando un protocolo de aplicación definido por el grupo. | Establecer una conexión de cada ESP32 hacia la PC, completar `REGISTER` / `OK` y comprobar con registros el recorrido integrado `POST` → clasificación en servidor → `SET` → actuación física. Los mensajes deben respetar la especificación de §2.6; PV-06 a PV-16 verificarán registro, delimitación, rechazo de errores y recuperación previstos. | PC: `ServidorTcp`, `ManejadorConexion`, `Cliente`, `EstadoSistema` y funciones de `protocolo.py`; ambos ESP32: [ClienteTcp](apps/firmware/src/ClienteTcp.cpp), programas principales, `ProtocoloAplicacion` y `ReceptorLineas` C++. | Clientes ESP32, servidor y protocolo implementados. Comunicación TCP sobre WiFi real e integración física: [PENDIENTE DE EVIDENCIA]. Revisión de la diferencia de plazos indicada en §1.3: [PENDIENTE DE EVIDENCIA]. |
+| RF1 | Medir la distancia entre el sensor ultrasónico HC-SR04 y un objeto. | Obtener lecturas finitas positivas expresadas en centímetros y contrastarlas con una referencia física mediante PN-02. Ante timeout de ECHO o valor no válido, identificar la lectura como inválida, según PV-04; la tolerancia de medición se evalúa en RNF2. | ESP32 sensor: [SensorUltrasonico](apps/firmware/src/SensorUltrasonico.cpp) adquiere la distancia; [PrincipalSensor.cpp](apps/firmware/src/PrincipalSensor.cpp) planifica la adquisición y publicación mediante `ClienteTcp`. | Verificado físicamente con regla y publicaciones serie; exactitud y cadencia en PN-02/PN-04. |
+| RF2 | Interpretar cada distancia válida y clasificarla en cuatro rangos contiguos y sin solapamiento. | Asignar cada distancia finita positiva a exactamente un rango de §1.2. Las entradas de PV-01 a PV-03, incluidos 5, 5.01, 15, 15.01, 25, 25.01, 50 y 100 cm, deben producir la clasificación prevista y el comando correspondiente. | PC: `ControlDistancia.calcular_comando()` de [dominio.py](apps/servidor/dominio.py), invocado por `EstadoSistema.nueva_lectura()` tras el procesamiento de `POST` en `ManejadorConexion.procesar()`. | Cuatro rangos implementados; muestras físicas interiores y límites con entradas controladas (§4.2). |
+| RF3 | Activar los tres LEDs del objeto actuador en función del rango, con un comportamiento distinto por rango. | Aplicar el comando completo según §1.2: rojo a 4 Hz, amarillo o verde a 2 Hz con los demás LEDs apagados, o Lejos con los tres simultáneos a 2 Hz; una lectura inválida debe producir todos apagados. Verificar estos estados mediante PV-01 a PV-04 y la continuidad de fase ante comandos idénticos mediante PV-05. | PC: generación de `ComandoLeds` y `SET`; ESP32 actuador: [PrincipalActuador.cpp](apps/firmware/src/PrincipalActuador.cpp) entrega los estados recibidos a [ControladorLeds](apps/firmware/src/ControladorLeds.cpp). | Actuación e invalidez observadas; frecuencia nominal y fase respaldadas por código/pruebas, sin medida física exacta de Hz. |
+| RF4 | Enviar lecturas desde el objeto sensor al servidor y comandos desde el servidor al objeto actuador mediante sockets TCP sobre WiFi (IEEE 802.11), utilizando un protocolo de aplicación definido por el grupo. | Establecer una conexión de cada ESP32 hacia la PC, completar `REGISTER` / `OK` y comprobar con registros el recorrido integrado `POST` → clasificación en servidor → `SET` → actuación física. Los mensajes deben respetar la especificación de §2.6; PV-06 a PV-16 verificarán registro, delimitación, rechazo de errores y recuperación previstos. | PC: `ServidorTcp`, `ManejadorConexion`, `Cliente`, `EstadoSistema` y funciones de `protocolo.py`; ambos ESP32: [ClienteTcp](apps/firmware/src/ClienteTcp.cpp), programas principales, `ProtocoloAplicacion` y `ReceptorLineas` C++. | Intercambio WiFi/TCP y recuperación del registro documentados en PDF p. 4; limitaciones de plazos en §4.7. |
 
-Los criterios se relacionan con el diseño y las validaciones mediante la matriz de §2.7. Las pruebas disponibles con entradas controladas al servidor permiten evaluar los límites exactos de RF2 sin confundirlos con el error físico del sensor; las pruebas del recorrido integrado deberán comprobar conjuntamente adquisición, comunicación y actuación. La revisión del código y las evidencias de §4 serán necesarias para declarar el cumplimiento de cada requisito. La matriz de §2.7, las tablas de §4 y la especificación de §2.6 relacionan el código vigente con las pruebas disponibles y distinguen las discrepancias de los criterios de aceptación.
+Los criterios se relacionan con el diseño y las validaciones mediante la matriz de §2.7. Las entradas controladas permiten evaluar los límites exactos de RF2 sin confundirlos con el error del sensor. La evidencia integrada relaciona adquisición, comunicación y actuación; §4 delimita lo comprobado y §5 sintetiza el cumplimiento. La matriz de §2.7, las tablas de §4 y la especificación de §2.6 relacionan el código vigente con las pruebas disponibles y distinguen las discrepancias de los criterios de aceptación.
 
 ### 1.2 Rangos y lógica de control
 
-Para la clasificación, se considera válida una distancia finita mayor que cero, expresada en centímetros. El dominio Python implementa la siguiente lógica de generación de estados y el firmware actuador incluye su ejecución; la comprobación física permanece pendiente:
+Para la clasificación, se considera válida una distancia finita mayor que cero, expresada en centímetros. El dominio Python implementa la siguiente lógica y el firmware actuador ejecuta sus comandos; la evidencia física y las pruebas de límites se presentan en §4.2:
 
 | Distancia recibida | LED rojo | LED amarillo | LED verde |
 |---|---|---|---|
@@ -59,45 +57,45 @@ Para la clasificación, se considera válida una distancia finita mayor que cero
 
 La configuración vigente incorpora Lejos y sustituye los límites anteriores por los intervalos `(0, 5]`, `(5, 15]`, `(15, 25]` y `(25, +∞)`. Los valores 5, 15 y 25 cm pertenecen respectivamente a rojo, amarillo y verde; el intervalo siguiente excluye su límite inferior. No existen huecos ni solapamientos para las distancias finitas positivas. La lectura inválida es un estado de tratamiento de error, separado de los cuatro rangos válidos.
 
-En el protocolo, `off` representa apagado y `on` encendido fijo. `blink_4` representa cuatro ciclos completos por segundo: un período de 250 ms, con 125 ms encendido y 125 ms apagado. `blink_2` representa dos ciclos completos por segundo: un período de 500 ms, con 250 ms encendido y 250 ms apagado. Estas frecuencias describen ciclos completos, no el número de alternancias del GPIO. `ControladorLeds` implementa esas alternancias mediante `millis()`: un modo nuevo comienza encendido y un modo repetido conserva su fase y temporización. Al entrar en Lejos, el controlador sincroniza los tres LEDs desde encendido en el siguiente `actualizar()`; repetir ese `SET` conserva su fase común. `on` sigue admitido por el protocolo, aunque no se genera en estos rangos. Esto evita que el envío periódico de comandos reinicie el patrón; las frecuencias efectivas deberán medirse con el montaje.
+En el protocolo, `off` representa apagado y `on` encendido fijo. `blink_4` representa cuatro ciclos completos por segundo: un período de 250 ms, con 125 ms encendido y 125 ms apagado. `blink_2` representa dos ciclos completos por segundo: un período de 500 ms, con 250 ms encendido y 250 ms apagado. Estas frecuencias describen ciclos completos, no el número de alternancias del GPIO. `ControladorLeds` implementa esas alternancias mediante `millis()`: un modo nuevo comienza encendido y un modo repetido conserva su fase y temporización. Al entrar en Lejos, el controlador sincroniza los tres LEDs desde encendido en el siguiente `actualizar()`; repetir ese `SET` conserva su fase común. `on` sigue admitido por el protocolo, aunque no se genera en estos rangos. Esto evita que el envío periódico de comandos reinicie el patrón; la evidencia visual del parpadeo se analiza en §4.2.2.
 
 Un timeout de ECHO produce una lectura no finita en `SensorUltrasonico`. El codificador C++ transforma las lecturas no finitas, cero o negativas en `POST distance=invalid`; también normaliza como inválidas las distancias inferiores a 0.01 cm, según el umbral implementado para la representación decimal. El servidor interpreta `invalid` como una lectura inválida y genera `SET` con los tres estados `off`. El token `invalid` es válido dentro del protocolo; un mensaje mal formado o una distancia numérica cero o negativa recibida directamente se rechazan conforme a sus reglas. Esta distinción evita tratar un fallo de comunicación como una medición válida.
 
-El diseño también prevé el apagado al iniciar el actuador, ante una desconexión detectada y tras 2000 ms de ausencia de lecturas en el servidor o de comandos en el actuador, según corresponda. El firmware implementa el apagado inicial, el apagado ante pérdida de registro y el temporizador de 2000 ms sin `SET` completo consumido por el programa actuador, conservando la conexión en este último caso. `ClienteTcp` implementa los reintentos de ambos ESP32. El servidor registra roles, rechaza mensajes e invalida los datos y ordena apagar al liberar el sensor, incluido el cierre por timeout de recepción. Ese timeout difiere del plazo desde el último mensaje completo del diseño, como se explica en §1.3. Son comportamientos complementarios de RF3 y RF4, relacionados con PV-06 a PV-16; su validación integrada permanece [PENDIENTE DE EVIDENCIA].
+El diseño define también el apagado al iniciar el actuador, ante una desconexión detectada y tras 2000 ms de ausencia de lecturas en el servidor o de comandos en el actuador, según corresponda. El firmware implementa el apagado inicial, el apagado ante pérdida de registro y el temporizador de 2000 ms sin `SET` completo consumido por el programa actuador, conservando la conexión en este último caso. `ClienteTcp` implementa los reintentos de ambos ESP32. El servidor registra roles, rechaza mensajes e invalida los datos y ordena apagar al liberar el sensor, incluido el cierre por timeout de recepción. Ese timeout difiere del plazo desde el último mensaje completo del diseño, como se explica en §1.3. Son comportamientos complementarios de RF3 y RF4, relacionados con PV-06 a PV-16; su evidencia física y automatizada se delimita en §4.2.4.
 
-El dominio de clasificación no impone un límite superior de 150 cm ni excluye valores positivos inferiores a 3 cm. En cambio, **3 a 150 cm es el intervalo previsto para validar físicamente la exactitud** de RNF2. La cobertura lógica de los rangos no demuestra que el sensor cumpla la tolerancia fuera de ese intervalo ni que ya la cumpla dentro de él. Su cobertura experimental y sus resultados permanecen `[PENDIENTE DE MEDICIÓN]` y `[PENDIENTE DE EVIDENCIA]`.
+El dominio de clasificación no impone un límite superior de 150 cm ni excluye valores positivos inferiores a 3 cm. En cambio, **3 a 150 cm es el intervalo previsto para validar físicamente la exactitud** de RNF2. La serie cuantitativa de §4.4 demuestra el cumplimiento de la tolerancia en las posiciones ensayadas de 5–40 cm; las capturas de 3 cm son complementarias. Esta cobertura experimental se distingue del dominio lógico de clasificación.
 
 ### 1.3 Requerimientos no funcionales
 
-Los cuatro atributos cuantitativos adoptan los valores de referencia de la consigna como objetivos del equipo y mantienen pendiente su validación física para la Práctica 2. RNF5 concreta la exigencia de código legible, modular, orientado a objetos y documentado mediante una revisión verificable. Su alcance incluye el servidor Python, ambos firmwares C++ y la biblioteca C++ de tipos, protocolo y recepción de líneas; las reglas de distancia pertenecen exclusivamente al dominio Python.
+Los cuatro atributos cuantitativos adoptan los valores de referencia de la consigna como objetivos del equipo. Los resultados físicos se contrastan con esos objetivos en PN-01 a PN-04, conservando las restricciones de cobertura y método. RNF5 concreta la exigencia de código legible, modular, orientado a objetos y documentado mediante una revisión verificable. Su alcance incluye el servidor Python, ambos firmwares C++ y la biblioteca C++ de tipos, protocolo y recepción de líneas; las reglas de distancia pertenecen exclusivamente al dominio Python.
 
 | ID | Atributo de calidad | Criterio de aceptación | Método de verificación | Componente o alcance afectado | Estado de validación |
 |---|---|---|---|---|---|
-| RNF1 | Estabilidad | Operar durante al menos 10 minutos continuos, con cero reinicios y cero bloqueos, manteniendo la adquisición, el intercambio TCP y la respuesta de los LEDs. | PN-01: registrar inicio, fin y eventos de los tres equipos; observar continuidad de lecturas y actuación, y documentar cualquier interrupción. | Sistema distribuido completo: ESP32 sensor, servidor TCP y ESP32 actuador. | [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA] |
-| RNF2 | Exactitud de medición | Mantener un error absoluto máximo ≤ 3 cm respecto de una referencia física dentro del intervalo previsto de 3 a 150 cm. | PN-02: comparar lecturas individuales con una regla o cinta métrica en posiciones que cubran los cuatro rangos y los extremos del intervalo; calcular el valor absoluto de cada diferencia y su máximo. Registrar referencias, repeticiones y condiciones del ensayo. | HC-SR04, circuito y adquisición del ESP32 sensor; comprobar la conservación del valor comunicado al servidor. | [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA] |
-| RNF3 | Tiempo de respuesta extremo a extremo | Reflejar cada cambio de rango ensayado en el estado visible del actuador en un tiempo máximo de 1 s desde el cambio físico de distancia. | PN-03: registrar el cambio físico y la actuación con una grabación o instrumento de tiempo común; calcular la diferencia temporal por ensayo y el máximo observado, indicando resolución y transiciones evaluadas. | Recorrido completo sensor → servidor → actuador, incluidos adquisición, red, procesamiento y ejecución del comando. | [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA] |
-| RNF4 | Frecuencia de muestreo | Obtener al menos 2 lecturas/s durante la operación registrada del sensor. | PN-04: contar lecturas obtenidas durante una ventana de duración conocida y calcular cantidad/duración; contabilizar por separado lecturas inválidas y `POST` recibidos en el servidor para contrastar adquisición y recepción. | Planificación de adquisición en ESP32 sensor; recepción en servidor como comprobación del envío. | [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA] |
-| RNF5 | Calidad del código | Presentar módulos con responsabilidades delimitadas, clases que encapsulen estado y operaciones, interfaces documentadas, nombres y convenciones consistentes en Python y C++, y reglas de control separadas del hardware y los sockets. | Revisión de §3.4 sobre una versión identificada del código final: inspeccionar módulos, clases, interfaces y dependencias en ambos lenguajes; registrar por criterio el cumplimiento, el archivo o fragmento que lo respalda y los ajustes pendientes. | Servidor Python, firmware C++ de ambos ESP32 y biblioteca C++ de tipos, protocolo y recepción de líneas. | Separación de responsabilidades identificada en el código disponible. Revisión integral documentada: [PENDIENTE DE EVIDENCIA]. |
+| RNF1 | Estabilidad | Operar durante al menos 10 minutos continuos, con cero reinicios y cero bloqueos, manteniendo la adquisición, el intercambio TCP y la respuesta de los LEDs. | PN-01: registrar inicio, fin y eventos de los tres equipos; observar continuidad de lecturas y actuación, y documentar cualquier interrupción. | Sistema distribuido completo: ESP32 sensor, servidor TCP y ESP32 actuador. | Cumple en la sesión física de 24 min (§4.3). |
+| RNF2 | Exactitud de medición | Mantener un error absoluto máximo ≤ 3 cm respecto de una referencia física dentro del intervalo previsto de 3 a 150 cm. | PN-02: comparar lecturas individuales con una regla o cinta métrica en posiciones que cubran los cuatro rangos y los extremos del intervalo; calcular el valor absoluto de cada diferencia y su máximo. Registrar referencias, repeticiones y condiciones del ensayo. | HC-SR04, circuito y adquisición del ESP32 sensor; comprobar la conservación del valor comunicado al servidor. | Máximo individual 0.90 cm en 5–40 cm; cobertura parcial del objetivo 3–150 cm (§4.4). |
+| RNF3 | Tiempo de respuesta extremo a extremo | Reflejar cada cambio de rango ensayado en el estado visible del actuador en un tiempo máximo de 1 s desde el cambio físico de distancia. | PN-03: registrar el cambio físico y la actuación con una grabación o instrumento de tiempo común; calcular la diferencia temporal por ensayo y el máximo observado, indicando resolución y transiciones evaluadas. | Recorrido completo sensor → servidor → actuador, incluidos adquisición, red, procesamiento y ejecución del comando. | Cinco ensayos: promedio 0.526 s y máximo 0.62 s; todos dentro del límite de 1 s (§4.5). |
+| RNF4 | Frecuencia de muestreo | Obtener al menos 2 lecturas/s durante la operación registrada del sensor. | PN-04: contar lecturas obtenidas durante una ventana de duración conocida y calcular cantidad/duración; contabilizar por separado lecturas inválidas y `POST` recibidos en el servidor para contrastar adquisición y recepción. | Planificación de adquisición en ESP32 sensor; recepción en servidor como comprobación del envío. | 39 lecturas/10 s = 3.9 lecturas/s, por encima del mínimo de 2 lecturas/s (§4.6). |
+| RNF5 | Calidad del código | Presentar módulos con responsabilidades delimitadas, clases que encapsulen estado y operaciones, interfaces documentadas, nombres y convenciones consistentes en Python y C++, y reglas de control separadas del hardware y los sockets. | Revisión de §3.4 sobre una versión identificada del código final: inspeccionar módulos, clases, interfaces y dependencias en ambos lenguajes; registrar por criterio el cumplimiento, el archivo o fragmento que lo respalda y los hallazgos y limitaciones. | Servidor Python, firmware C++ de ambos ESP32 y biblioteca C++ de tipos, protocolo y recepción de líneas. | Revisión estructural documentada sobre 3a25f24 en §3.4; limitaciones técnicas expresas. |
 
 Para RNF2, la aceptación se basará en el **máximo de los errores absolutos individuales**, no únicamente en el promedio; este último podría ocultar lecturas que excedan la tolerancia. Las lecturas inválidas se registrarán por separado y no se usarán como errores numéricos. La conclusión experimental deberá indicar las posiciones realmente ensayadas y sus condiciones, sin generalizar a distancias no probadas.
 
-Para RNF3, el origen temporal será el cambio físico de distancia y el final el cambio visible correspondiente del LED. Así se incluirá la espera hasta la siguiente adquisición y todo el recorrido de comunicación y control. No se restarán directamente timestamps de relojes de equipos distintos sin una referencia temporal común. El análisis de temporización del diseño podrá apoyar la explicación, pero no sustituirá la medición extremo a extremo exigida por la consigna.
+Para RNF3, el criterio toma como origen temporal el cambio físico de distancia y el final el cambio visible correspondiente del LED. Así se incluirá la espera hasta la siguiente adquisición y todo el recorrido de comunicación y control. No se restarán directamente timestamps de relojes de equipos distintos sin una referencia temporal común. El diseño apoya la explicación, pero no sustituye la medición. Los cinco tiempos físicos registrados se comparan con el límite de 1 s en §4.5.
 
-La revisión de RNF5 deberá comprobar, en particular, que el sensor adquiere y comunica, el servidor clasifica y produce comandos, y el actuador ejecuta los estados recibidos. También verificará la encapsulación de pines y conexiones, la coherencia entre declaraciones y uso de interfaces, constantes con nombres descriptivos y comentarios que expliquen unidades, temporización y tratamiento de errores. En Python se revisarán `ServidorTcp`, `ManejadorConexion`, `Cliente` y `EstadoSistema` de [servidor.py](apps/servidor/servidor.py), el dominio y el protocolo. En C++ se revisarán `SensorUltrasonico`, `ControladorLeds` y `ClienteTcp`, la biblioteca común y los programas principales, que contienen `setup()` y `loop()` y no son clases. La lista de revisión deberá contrastar cada interfaz con sus declaraciones y llamadas, comprobar la sincronización del estado y los envíos del servidor y registrar por criterio un enlace al código, el hallazgo y cualquier ajuste pendiente. Las convenciones se evaluarán de acuerdo con cada lenguaje; la disponibilidad de módulos separados no basta para aprobar toda la revisión.
+RNF5 se verifica mediante la inspección documentada en §3.4: responsabilidades de cada objeto, declaraciones y uso de interfaces, encapsulación, dependencias, convenciones de cada lenguaje, sincronización y errores. Se contrastaron módulos Python, clases C++, programas principales y filtros de compilación, sin modificar el código.
 
 Los **valores objetivo** son los límites de aceptación de la tabla. Los **parámetros implementados** incluyen 250 ms entre adquisiciones del sensor registrado y con capacidad de envío, un timeout de ECHO de 30000 µs y 2000 ms sin comandos en el actuador. `ClienteTcp` configura 2000 ms para recibir `OK` desde la apertura TCP completada, 2000 ms para un envío pendiente y 2000 ms entre reintentos TCP; la apertura TCP puede esperar hasta 1000 ms. Tras perder WiFi espera 2000 ms para reintentar y luego deja 10000 ms entre intentos de asociación. La adquisición se omite mientras no hay registro o existe un envío pendiente, sin acumular lecturas para una conexión futura. Los 250 ms equivalen nominalmente a 4 lecturas/s; no garantizan la frecuencia observada, la estabilidad ni la respuesta extremo a extremo.
 
-En el servidor, `PLAZO = 2.0` configura el timeout de las operaciones del socket mediante `settimeout()`. La espera de `recv()` vence si no recibe datos durante esa operación; un fragmento recibido permite iniciar otra espera, aunque todavía no haya una línea completa. **No equivale al plazo de 2000 ms desde la apertura sin registro completo o desde el último `POST` completo descrito por el diseño.** El código sí comprueba por separado la antigüedad de la última lectura al registrar un actuador. La diferencia de supervisión queda pendiente de revisión técnica y evidencia, especialmente para PV-12 y PV-13 con mensajes incompletos; no se modifican sus objetivos ni se declara satisfecho ese comportamiento.
+En el servidor, `PLAZO = 2.0` configura el timeout de las operaciones del socket mediante `settimeout()`. La espera de `recv()` vence si no recibe datos durante esa operación; un fragmento recibido permite iniciar otra espera, aunque todavía no haya una línea completa. **No equivale al plazo de 2000 ms desde la apertura sin registro completo o desde el último `POST` completo descrito por el diseño.** El código sí comprueba por separado la antigüedad de la última lectura al registrar un actuador. La diferencia de supervisión es una limitación vigente para PV-12/PV-13 con fragmentos prolongados; no se modifican sus objetivos ni se afirma que el código aplique un plazo estricto desde la última línea completa.
 
-Los **resultados medidos** se incorporarán en §4 y §5 con la versión de software y sus evidencias. La ejecución automatizada documentada por el equipo deberá respaldarse con registros; no sustituye las mediciones físicas de RNF1–RNF4 ni la revisión integral de RNF5. Los resultados de la Práctica 1 no acreditan estos requisitos de la Práctica 2.
+Los **resultados medidos** y sus fuentes se presentan en §4 y §5. La evidencia física y la automatización tienen alcances distintos. Los resultados de P1 no acreditan P2.
 
 ## 2. Análisis y Diseño
 
-Esta sección integra los circuitos diseñados y los diagramas de arquitectura, clases y secuencias contrastados con el software vigente. La correspondencia eléctrica con el montaje definitivo y los comportamientos físicos siguen pendientes de validación.
+Esta sección integra los circuitos diseñados y los diagramas de arquitectura, clases y secuencias contrastados con el software vigente. Las fotografías y capturas de §4 documentan el montaje y la operación; el modelo eléctrico y la temporización nominal explican su funcionamiento.
 
 ### 2.1 Arquitectura distribuida del sistema
 
-La arquitectura separa la adquisición de distancia, el procesamiento de las lecturas y la actuación física en tres equipos: **ESP32 sensor → servidor TCP Python → ESP32 actuador**. Esta distribución responde al sistema exigido por la consigna y delimita las responsabilidades de RF1–RF4: el sensor obtiene los datos, la PC toma la decisión de control y el actuador ejecuta sus órdenes. Los dos programas ESP32 están implementados de forma independiente; el programa local de la Práctica 1 ya no forma parte de los entornos activos. La correspondencia con el montaje definitivo permanece pendiente de evidencia.
+La arquitectura separa la adquisición de distancia, el procesamiento de las lecturas y la actuación física en tres equipos: **ESP32 sensor → servidor TCP Python → ESP32 actuador**. Esta distribución responde al sistema exigido por la consigna y delimita las responsabilidades de RF1–RF4: el sensor obtiene los datos, la PC toma la decisión de control y el actuador ejecuta sus órdenes. Los dos programas ESP32 están implementados de forma independiente; el programa local de la Práctica 1 ya no forma parte de los entornos activos. La correspondencia con el montaje definitivo se documenta con fotografías y capturas en §4 y §8.
 
 El firmware utiliza C++ con Arduino y los entornos definidos en [platformio.ini](platformio.ini). `sensor`, predeterminado, selecciona `PrincipalSensor.cpp`, `ClienteTcp.cpp` y `SensorUltrasonico.cpp` para la placa `esp32doit-devkit-v1`; `actuador` selecciona `PrincipalActuador.cpp`, `ClienteTcp.cpp` y `ControladorLeds.cpp` para `esp32dev`. Cada selección incluye únicamente el programa principal de su rol y ambos reutilizan la biblioteca de `apps/firmware/lib/Compartido/`.
 
@@ -107,7 +105,7 @@ En el otro ESP32, `ClienteTcp` valida las líneas recibidas y conserva el últim
 
 El [servidor simplificado](apps/servidor/servidor.py) utiliza `socketserver.ThreadingTCPServer`, con un hilo por conexión aceptada. `ManejadorConexion` recibe mediante sockets bloqueantes con timeout y `Cliente.enviar()` utiliza `sendall`; no emplea `Sesion`, `ColaEnvio` ni `select`. `EstadoSistema` protege los roles y la última lectura con un `threading.Lock`, y cada `Cliente` serializa sus envíos con otro bloqueo porque el hilo del sensor puede escribir en la conexión del actuador. Los envíos de registro y actuación también se realizan con el bloqueo del estado tomado; un envío lento puede retrasar otras operaciones. Este modelo de concurrencia no demuestra por sí mismo el cumplimiento del tiempo de respuesta de RNF3. `time.monotonic()` permite evaluar la antigüedad de la lectura y `logging` registra los intercambios.
 
-El siguiente diagrama conserva el [despliegue del diseño del equipo](docs/diagramas/Diseno_del_sistema.md#11-diagrama-de-despliegue), coherente con la distribución implementada. Los enlaces y equipos del montaje físico deben verificarse. **Todas las direcciones IP son ilustrativas.** El puerto TCP `5000` es el valor predeterminado comprobado en el código, no una configuración del montaje ya verificada.
+El siguiente diagrama conserva el [despliegue del diseño del equipo](docs/diagramas/Diseno_del_sistema.md#11-diagrama-de-despliegue), coherente con la distribución implementada. El montaje físico se documenta en §3.1 y §4. **Todas las direcciones IP son ilustrativas.** El puerto TCP `5000` es el valor predeterminado comprobado en el código y coincide con el puerto de la sesión de la página 4; las IP del diagrama siguen siendo ilustrativas.
 
 ```mermaid
 flowchart LR
@@ -119,7 +117,7 @@ flowchart LR
     end
 
     ROUTER["Router WiFi<br/>IEEE 802.11<br/>192.168.0.1"]
-    PC["Servidor TCP — PC<br/>Python 3.13 / socketserver<br/>192.168.0.102:5000<br/>Clasifica distancias y envía SET"]
+    PC["Servidor TCP — PC<br/>Python 3 / socketserver<br/>192.168.0.102:5000<br/>Clasifica distancias y envía SET"]
 
     subgraph ACTUADOR["Objeto inteligente 2 — Actuador"]
         ESP_A["ESP32 / ESP-WROOM-32<br/>Cliente TCP: actuator<br/>192.168.0.100<br/>Envía REGISTER y recibe SET"]
@@ -147,22 +145,22 @@ flowchart LR
     class LV verde;
 ```
 
-Las líneas discontinuas representan los enlaces WiFi bidireccionales previstos a través del router, que proporciona conectividad IP entre los equipos de la red local. El router transporta el tráfico y no participa en la clasificación ni en la generación de comandos. Los enlaces de red deben distinguirse del flujo de aplicación: las lecturas se dirigen del sensor al servidor y las órdenes del servidor al actuador; comprobar ese recorrido con las placas permanece pendiente.
+Las líneas discontinuas representan los enlaces WiFi bidireccionales previstos a través del router, que proporciona conectividad IP entre los equipos de la red local. El router transporta el tráfico y no participa en la clasificación ni en la generación de comandos. Los enlaces de red deben distinguirse del flujo de aplicación: las lecturas se dirigen del sensor al servidor y las órdenes del servidor al actuador; ese recorrido con las placas se respalda en §4.2.3.
 
 En el modelo cliente-servidor implementado, **ambos ESP32 inician su propia conexión TCP persistente hacia la PC** mediante una instancia de `ClienteTcp` por placa. El servidor escucha, acepta conexiones, responde al registro y envía órdenes por el socket del actuador; la PC no abre una conexión nueva hacia este objeto. `REGISTER` identifica el rol y ambos programas esperan `OK` antes de operar. El firmware configura WiFi en modo estación y permite obtener la dirección local mediante DHCP; las direcciones efectivas aún deben registrarse durante el montaje.
 
-En los ESP32, `ClienteTcp.actualizar()` atiende envío y recepción con `send` y `recv` de lwIP y `MSG_DONTWAIT`, conserva fragmentos y el progreso del único envío pendiente y gestiona los reintentos. Esto no hace que todo el firmware sea no bloqueante: `connect` puede esperar hasta 1000 ms y la adquisición de ECHO hasta 30000 µs. El actuador supervisa localmente la ausencia de comandos. En la PC, el timeout de 2 s se aplica a las operaciones del socket; la llegada de fragmentos puede prolongar la espera de una línea completa. La diferencia respecto del plazo del diseño queda pendiente de revisión técnica conforme a §1.3.
+En los ESP32, `ClienteTcp.actualizar()` atiende envío y recepción con `send` y `recv` de lwIP y `MSG_DONTWAIT`, conserva fragmentos y el progreso del único envío pendiente y gestiona los reintentos. Esto no hace que todo el firmware sea no bloqueante: `connect` puede esperar hasta 1000 ms y la adquisición de ECHO hasta 30000 µs. El actuador supervisa localmente la ausencia de comandos. En la PC, el timeout de 2 s se aplica a las operaciones del socket; la llegada de fragmentos puede prolongar la espera de una línea completa. La diferencia respecto del plazo del diseño queda identificada como limitación en §1.3.
 
-La entrada de consola de [__main__.py](apps/servidor/__main__.py) define `--ip` con valor predeterminado `0.0.0.0` y `--puerto` con valor predeterminado `5000`, coincidentes con el constructor de `ServidorTcp`. `0.0.0.0` indica escucha en las interfaces IPv4 locales; no es una dirección de destino para los ESP32. Los clientes deberán utilizar la IPv4 real de la PC y el puerto efectivo. Esa configuración y la conectividad WiFi deberán comprobarse durante la integración física.
+La entrada de consola de [__main__.py](apps/servidor/__main__.py) define `--ip` con valor predeterminado `0.0.0.0` y `--puerto` con valor predeterminado `5000`, coincidentes con el constructor de `ServidorTcp`. `0.0.0.0` indica escucha en las interfaces IPv4 locales; no es una dirección de destino para los ESP32. Los clientes deberán utilizar la IPv4 real de la PC y el puerto efectivo. La página 4 documenta una sesión en 172.20.10.2:5000 y el actuador en 172.20.10.3; estas direcciones no son parámetros universales.
 
-La configuración de ejemplo [ConfiguracionRed.example.h](apps/firmware/include/ConfiguracionRed.example.h) contiene SSID vacío e IP `0.0.0.0`; con esos valores, `ClienteTcp` deshabilita los intentos de conexión. El archivo local y la carga de cada entorno deberán prepararse según la guía de montaje; la existencia del ejemplo no acredita una configuración de red operativa.
+La configuración de ejemplo [ConfiguracionRed.example.h](apps/firmware/include/ConfiguracionRed.example.h) contiene SSID vacío e IP `0.0.0.0`; con esos valores, `ClienteTcp` deshabilita los intentos de conexión. Para reproducir el montaje se prepara el archivo local y se carga cada entorno según la guía. La configuración operativa utilizada en las pruebas está respaldada por las capturas de §4.1.
 
 | Componente | Responsabilidad | Intercambio principal | Estado actual |
 |---|---|---|---|
-| ESP32 sensor y HC-SR04 | Adquirir distancia con intervalo nominal de 250 ms, condicionado al registro y la disponibilidad de envío; comunicar lecturas válidas o inválidas. | Enviar `REGISTER type=sensor` y `POST`; recibir `OK` o `ERROR`. | `PrincipalSensor`, `SensorUltrasonico` y `ClienteTcp` implementados. Exactitud y cadencia físicas: [PENDIENTE DE MEDICIÓN]. Integración: [PENDIENTE DE EVIDENCIA]. |
-| PC / servidor TCP Python | Registrar clientes, clasificar lecturas, generar comandos y atender la ausencia de datos con el timeout implementado. | Recibir `REGISTER` y `POST`; enviar `OK`, `ERROR` y `SET`. | Servidor, dominio y protocolo implementados; diferencia de plazos pendiente de revisión técnica. Integración con las placas: [PENDIENTE DE EVIDENCIA]. |
-| ESP32 actuador y tres LEDs | Ejecutar el último comando recibido, conservar la fase de modos repetidos y supervisar la ausencia de comandos. | Enviar `REGISTER type=actuator`; recibir `OK`, `ERROR` y `SET`. | `PrincipalActuador`, `ControladorLeds` y `ClienteTcp` implementados. Actuación y tiempos físicos: [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA]. |
-| Router WiFi | Proporcionar conectividad IP entre los tres equipos. | Previsto: transportar el tráfico de las dos conexiones TCP sobre IEEE 802.11. | Configuración y conectividad del montaje: [PENDIENTE DE EVIDENCIA]. |
+| ESP32 sensor y HC-SR04 | Adquirir distancia con intervalo nominal de 250 ms, condicionado al registro y la disponibilidad de envío; comunicar lecturas válidas o inválidas. | Enviar `REGISTER type=sensor` y `POST`; recibir `OK` o `ERROR`. | Adquisición y publicación verificadas; exactitud y cadencia con alcance de PN-02/PN-04. |
+| PC / servidor TCP Python | Registrar clientes, clasificar lecturas, generar comandos y atender la ausencia de datos con el timeout implementado. | Recibir `REGISTER` y `POST`; enviar `OK`, `ERROR` y `SET`. | POST/SET visibles en el registro físico, p. 4; timeout por operación documentado. |
+| ESP32 actuador y tres LEDs | Ejecutar el último comando recibido, conservar la fase de modos repetidos y supervisar la ausencia de comandos. | Enviar `REGISTER type=actuator`; recibir `OK`, `ERROR` y `SET`. | Registro y actuación documentados; observación del parpadeo en §4.2.2. |
+| Router WiFi | Proporcionar conectividad IP entre los tres equipos. | Previsto: transportar el tráfico de las dos conexiones TCP sobre IEEE 802.11. | Conectividad operativa en la sesión; SSID y modelo de router no especificados en el expediente. |
 
 La comunicación se organiza en las cuatro capas del modelo TCP/IP utilizado en la práctica:
 
@@ -170,16 +168,16 @@ La comunicación se organiza en las cuatro capas del modelo TCP/IP utilizado en 
 |---|---|---|
 | Aplicación | Protocolo de texto del grupo, descrito en §2.6; implementaciones independientes Python y C++. | Definir los mensajes de registro, lectura, actuación y error, así como su delimitación. |
 | Transporte | TCP y sockets; servidor Python y clientes ESP32 implementados, con puerto predeterminado `5000`. | Mantener las conexiones de los clientes y transportar el flujo ordenado de bytes. |
-| Internet | IPv4; configuración real de la red local pendiente. | Identificar los equipos mediante direcciones IP. |
-| Acceso a la red | WiFi, IEEE 802.11; gestión de conectividad implementada en `ClienteTcp`, asociación real pendiente de evidencia. | Proporcionar el enlace de los equipos con el router. |
+| Internet | IPv4; direcciones observadas de una sesión en §4.1. | Identificar los equipos mediante direcciones IP. |
+| Acceso a la red | WiFi, IEEE 802.11; gestión de conectividad implementada en `ClienteTcp`, asociación real documentada en PDF p. 4. | Proporcionar el enlace de los equipos con el router. |
 
-Los componentes principales de adquisición, transporte, clasificación y actuación están implementados y cuentan con pruebas automatizadas disponibles. La ejecución de esas pruebas y sus registros deben distinguirse de la integración con hardware. La identificación de la red, las IP reales, el puerto utilizado y la comprobación del recorrido completo permanecen `[PENDIENTE DE EVIDENCIA]`; las mediciones físicas de desempeño permanecen `[PENDIENTE DE MEDICIÓN]`.
+Los componentes principales de adquisición, transporte, clasificación y actuación están implementados y cuentan con pruebas automatizadas disponibles. La ejecución de esas pruebas y sus registros deben distinguirse de la integración con hardware. Las IP y el puerto de una sesión figuran en §4.1; el SSID y el modelo del punto de acceso no se consignan. Los ensayos físicos de desempeño se presentan en PN-01 a PN-04.
 
 ### 2.2 Circuito del objeto sensor
 
-El objeto sensor comprende un ESP32 / ESP-WROOM-32 con conector Micro-USB, un HC-SR04 y tres resistencias de 2.2 kΩ que forman el divisor resistivo de ECHO. El ESP32 se alimenta por USB de 5 V y suministrará la alimentación del sensor desde VIN / 5 V. El siguiente esquema corresponde exclusivamente al objeto de adquisición de la Práctica 2:
+El objeto sensor comprende un ESP32 / ESP-WROOM-32 con conector Micro-USB, un HC-SR04 y tres resistencias de 2.2 kΩ que forman el divisor resistivo de ECHO. El ESP32 se alimenta por USB de 5 V y suministra la alimentación del sensor desde VIN / 5 V. El siguiente esquema corresponde exclusivamente al objeto de adquisición de la Práctica 2:
 
-![Circuito propuesto del objeto sensor](docs/diagramas/circuito-sensor.svg)
+![Circuito del objeto sensor](docs/diagramas/circuito-sensor.svg)
 
 Las conexiones conservan la asignación del [diseño del objeto sensor](docs/diagramas/Diseno_del_sistema.md#31-objeto-inteligente-con-sensor):
 
@@ -192,7 +190,7 @@ Las conexiones conservan la asignación del [diseño del objeto sensor](docs/dia
 | HC-SR04 ECHO | ECHO → R1 de 2.2 kΩ → nodo conectado a GPIO18 (D18). | Conducir el pulso de eco hacia la entrada mediante el divisor. |
 | Retorno del divisor | Nodo GPIO18 → R2 de 2.2 kΩ → R3 de 2.2 kΩ → GND. | Formar la rama inferior de 4.4 kΩ del divisor. |
 
-El firmware utiliza GPIO23 para generar TRIG y GPIO18 para medir la duración de ECHO. [SensorUltrasonico.cpp](apps/firmware/src/SensorUltrasonico.cpp) implementa el pulso de 10 µs y el timeout de 30000 µs previstos por el diseño. Son parámetros de código; su comportamiento eléctrico y la exactitud física siguen pendientes. La lectura inválida se trata conforme a §1.2.
+El firmware utiliza GPIO23 para generar TRIG y GPIO18 para medir la duración de ECHO. [SensorUltrasonico.cpp](apps/firmware/src/SensorUltrasonico.cpp) implementa el pulso de 10 µs y el timeout de 30000 µs previstos por el diseño. Estos parámetros definen la adquisición; la exactitud obtenida se evalúa en PN-02. La lectura inválida se trata conforme a §1.2.
 
 El divisor es necesario porque ECHO utiliza una señal de 5 V, superior al nivel lógico de 3.3 V del ESP32. El diseño evita conectar ECHO directamente a GPIO18: R1 se sitúa entre ECHO y el nodo de lectura, mientras R2 y R3 están en serie entre ese nodo y GND. La tensión ideal en el nodo se obtiene mediante:
 
@@ -204,19 +202,18 @@ VGPIO18 = 5 V × 4.4 kΩ / (2.2 kΩ + 4.4 kΩ)
 VGPIO18 ≈ 3.33 V
 ```
 
-Este resultado es un cálculo ideal con los valores nominales del diseño, no una tensión medida ni una validación eléctrica del montaje. La tierra común une el ESP32, el HC-SR04 y el retorno del divisor dentro de este objeto. El segundo ESP32 corresponde al circuito independiente de actuación. El equipo declara el montaje conjunto de los componentes; la comunicación prevista por WiFi y las condiciones eléctricas siguen pendientes de evidencia verificable.
+La tensión de 3.33 V es un cálculo ideal con los valores nominales del divisor. La tierra común une el ESP32, el HC-SR04 y el retorno del divisor dentro del objeto sensor; el segundo ESP32 pertenece al circuito independiente de actuación. Las fotografías respaldan el montaje y las capturas, la comunicación WiFi/TCP.
 
-**Parámetros de adquisición:** implementados; mediciones y registros del HC-SR04 real: [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA]
 
-**Montaje realizado según declaración conjunta del equipo; fotografías, lista definitiva de componentes y correspondencia verificada con el esquema:** [PENDIENTE DE EVIDENCIA]
+![Montaje físico del objeto sensor](docs/evidencias/sensor.jpeg)
 
-**Comprobación de la alimentación y tensión real del nodo ECHO:** [PENDIENTE DE MEDICIÓN]
+La fotografía conserva el contenido original y respalda el montaje; el esquema y el código precisan la asignación GPIO23/18.
 
 ### 2.3 Circuito del objeto actuador
 
-El objeto actuador comprende un segundo ESP32 / ESP-WROOM-32 con conector USB-C, tres LEDs —rojo, amarillo y verde— y tres resistencias de 220 Ω, una por LED. La placa se alimentará mediante USB de 5 V. Los LEDs serán controlados por señales GPIO de 3.3 V, según el esquema; la alimentación USB no equivale a aplicar 5 V a estas salidas.
+El objeto actuador comprende un segundo ESP32 / ESP-WROOM-32 con conector USB-C, tres LEDs —rojo, amarillo y verde— y tres resistencias de 220 Ω, una por LED. La placa se alimenta mediante USB de 5 V. Los LEDs son controlados por señales GPIO de 3.3 V, según el esquema; la alimentación USB no equivale a aplicar 5 V a estas salidas.
 
-![Circuito propuesto del objeto actuador](docs/diagramas/circuito-actuador.svg)
+![Circuito del objeto actuador](docs/diagramas/circuito-actuador.svg)
 
 Las tres ramas conservan la polaridad y las conexiones del [diseño del objeto actuador](docs/diagramas/Diseno_del_sistema.md#32-objeto-inteligente-con-actuadores):
 
@@ -228,13 +225,14 @@ Las tres ramas conservan la polaridad y las conexiones del [diseño del objeto a
 | LED rojo | GPIO27 → ánodo del LED → cátodo → resistencia RR de 220 Ω → GND. |
 | Retorno común | Las tres resistencias retornan al GND de este ESP32. |
 
-Cada resistencia se conecta en serie con su LED para limitar la corriente de su rama. El retorno compartido proporciona la referencia eléctrica común del objeto actuador. Con esta polaridad, un nivel alto en el GPIO encenderá el LED y un nivel bajo lo apagará; la alternancia temporizada producirá el parpadeo. El esquema no incluye el HC-SR04, que pertenece al objeto sensor independiente.
+Cada resistencia se conecta en serie con su LED para limitar la corriente de su rama. El retorno compartido proporciona la referencia eléctrica común del objeto actuador. Con esta polaridad, un nivel alto en el GPIO enciende el LED y un nivel bajo lo apaga; la alternancia temporizada produce el parpadeo. El esquema no incluye el HC-SR04, que pertenece al objeto sensor independiente.
 
-El servidor genera `SET` después de clasificar la lectura. El firmware actuador valida y consume el último comando completo pendiente, lo entrega a `ControladorLeds` y atiende las salidas y el parpadeo mediante `millis()`. Esta separación distingue la decisión de control en la PC de su ejecución en el actuador; ambas están implementadas, con comprobación física pendiente. Los rangos y frecuencias se definen en §1.2; el circuito aporta las salidas necesarias para representarlos.
+El servidor genera `SET` después de clasificar la lectura. El firmware actuador valida y consume el último comando completo pendiente, lo entrega a `ControladorLeds` y atiende las salidas y el parpadeo mediante `millis()`. Esta separación distingue la decisión de control en la PC de su ejecución en el actuador; ambas están implementadas y cuentan con evidencia física en §4.2. Los rangos y frecuencias se definen en §1.2; el circuito aporta las salidas necesarias para representarlos.
 
-**Recepción y control de salidas:** implementados; correspondencia con la actuación física: [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA]
 
-**Montaje realizado según declaración conjunta del equipo; fotografías, lista definitiva de componentes y correspondencia verificada con el esquema:** [PENDIENTE DE EVIDENCIA]
+![Montaje físico del objeto actuador](docs/evidencias/actuador.jpeg)
+
+La fotografía muestra las tres ramas de LEDs; el video complementa la observación del parpadeo descrita en §4.2.2.
 
 ### 2.4 Diagrama de clases
 
@@ -492,30 +490,29 @@ En el actuador, `setup()` inicializa `ControladorLeds` con salidas apagadas y el
 
 | Componente o tipo | Lenguaje | Archivo real | Responsabilidad | Estado de implementación |
 |---|---|---|---|---|
-| `ServidorTcp` | Python | [servidor.py](apps/servidor/servidor.py) | Administrar el servicio, el estado y las conexiones abiertas; heredar la atención por hilos de `socketserver`. | Implementado; integración física: [PENDIENTE DE EVIDENCIA]. |
+| `ServidorTcp` | Python | [servidor.py](apps/servidor/servidor.py) | Administrar el servicio, el estado y las conexiones abiertas; heredar la atención por hilos de `socketserver`. | Implementado; conexión con las placas documentada en PDF p. 4. |
 | `ManejadorConexion` | Python | [servidor.py](apps/servidor/servidor.py) | Reconstruir y procesar líneas por conexión, gestionar errores y liberar el rol al finalizar. | Implementado. |
 | `Cliente` | Python | [servidor.py](apps/servidor/servidor.py) | Encapsular socket y rol, serializar envíos con un bloqueo y solicitar el cierre. | Implementado. |
-| `EstadoSistema` | Python | [servidor.py](apps/servidor/servidor.py) | Coordinar roles, antigüedad de lectura, clasificación y comandos con estado protegido. | Implementado; revisión de plazos conforme a §1.3 pendiente. |
+| `EstadoSistema` | Python | [servidor.py](apps/servidor/servidor.py) | Coordinar roles, antigüedad de lectura, clasificación y comandos con estado protegido. | Implementado; plazo por operación y bloqueo global identificados como limitaciones. |
 | `ControlDistancia`, `ComandoLeds`, `EstadoLed` | Python | [dominio.py](apps/servidor/dominio.py) | Clasificar en la PC y representar estados sin depender de GPIO ni sockets. | Implementados. |
 | `Mensaje`, `ReceptorLineas`, `TipoCliente`, `MotivoError` | Python | [protocolo.py](apps/servidor/protocolo.py) | Representar mensajes, delimitar líneas y definir roles y motivos de rechazo. | Implementados. |
 | `leer_mensaje`, `crear_comando`, `crear_error`, `codificar`; `MensajeInvalido` | Python | [protocolo.py](apps/servidor/protocolo.py) | Interpretar y construir mensajes con funciones de módulo; notificar errores con una excepción. | Implementados. |
 | Entrada de consola: `main`, `puerto_valido`, `ipv4_valida`, `ipv4_locales` | Python | [__main__.py](apps/servidor/__main__.py) | Validar argumentos, iniciar el servicio, mostrar direcciones locales y configurar registros. | Funciones implementadas. |
-| `ClienteTcp`, `ClienteTcp::Estado` | C++ | [ClienteTcp.h](apps/firmware/include/ClienteTcp.h), [implementación](apps/firmware/src/ClienteTcp.cpp) | Gestionar WiFi/TCP, registro, mensajes y reconexión de cada objeto. | Implementados; WiFi real: [PENDIENTE DE EVIDENCIA]. |
-| `SensorUltrasonico` | C++ | [SensorUltrasonico.h](apps/firmware/include/SensorUltrasonico.h), [implementación](apps/firmware/src/SensorUltrasonico.cpp) | Adquirir distancia con el HC-SR04 e identificar ausencia de eco. | Implementado; exactitud física: [PENDIENTE DE MEDICIÓN]. |
-| `ControladorLeds`, `ControladorLeds::Led` | C++ | [ControladorLeds.h](apps/firmware/include/ControladorLeds.h), [implementación](apps/firmware/src/ControladorLeds.cpp) | Ejecutar estados, conservar la fase y mantener la temporización y el apagado de LEDs. | Implementados; actuación física: [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA]. |
+| `ClienteTcp`, `ClienteTcp::Estado` | C++ | [ClienteTcp.h](apps/firmware/include/ClienteTcp.h), [implementación](apps/firmware/src/ClienteTcp.cpp) | Gestionar WiFi/TCP, registro, mensajes y reconexión de cada objeto. | Implementados; asociación WiFi, registro y reintento visibles en PDF p. 4. |
+| `SensorUltrasonico` | C++ | [SensorUltrasonico.h](apps/firmware/include/SensorUltrasonico.h), [implementación](apps/firmware/src/SensorUltrasonico.cpp) | Adquirir distancia con el HC-SR04 e identificar ausencia de eco. | Implementado; exactitud física de PN-02 dentro de las posiciones ensayadas. |
+| `ControladorLeds`, `ControladorLeds::Led` | C++ | [ControladorLeds.h](apps/firmware/include/ControladorLeds.h), [implementación](apps/firmware/src/ControladorLeds.cpp) | Ejecutar estados, conservar la fase y mantener la temporización y el apagado de LEDs. | Implementados; actuación visual documentada y temporización probada con reloj simulado. |
 | `ProtocoloAplicacion` | C++ | [ProtocoloAplicacion.h](apps/firmware/lib/Compartido/ProtocoloAplicacion.h), [implementación](apps/firmware/lib/Compartido/ProtocoloAplicacion.cpp) | Crear registro y lectura e interpretar comandos completos. | Implementado y utilizado por ambos programas. |
 | `ReceptorLineas`, `ResultadoRecepcion` | C++ | [ReceptorLineas.h](apps/firmware/lib/Compartido/ReceptorLineas.h), [implementación](apps/firmware/lib/Compartido/ReceptorLineas.cpp) | Reconstruir mensajes y comunicar el resultado por byte al cliente. | Implementados y utilizados por `ClienteTcp`. |
 | `EstadoLed`, `ComandoLeds`, `TipoCliente` | C++ | [Tipos.h](apps/firmware/lib/Compartido/Tipos.h) | Representar modos de LED, comandos y roles comunes al firmware. | Tipos implementados. |
-| Programa sensor: `setup`, `loop` | C++ | [PrincipalSensor.cpp](apps/firmware/src/PrincipalSensor.cpp) | Coordinar adquisición y publicación; utilizar el rol sensor. | Implementado; recorrido físico: [PENDIENTE DE EVIDENCIA]. |
-| Programa actuador: `setup`, `loop` | C++ | [PrincipalActuador.cpp](apps/firmware/src/PrincipalActuador.cpp) | Coordinar recepción, ejecución y supervisión local; utilizar el rol actuador. | Implementado; recorrido físico: [PENDIENTE DE EVIDENCIA]. |
+| Programa sensor: `setup`, `loop` | C++ | [PrincipalSensor.cpp](apps/firmware/src/PrincipalSensor.cpp) | Coordinar adquisición y publicación; utilizar el rol sensor. | Implementado; publicaciones físicas en PDF pp. 2–4. |
+| Programa actuador: `setup`, `loop` | C++ | [PrincipalActuador.cpp](apps/firmware/src/PrincipalActuador.cpp) | Coordinar recepción, ejecución y supervisión local; utilizar el rol actuador. | Implementado; registro físico y observación de actuación en §4.2. |
 
 La organización mantiene la adquisición y la actuación encapsuladas en C++, la clasificación en el dominio Python y los adaptadores de red separados de las reglas de control. Los tipos con nombres equivalentes en ambos lenguajes son definiciones distintas relacionadas por el protocolo. Esta estructura aporta elementos verificables para la revisión de modularidad y orientación a objetos de RNF5, sin declarar aprobada su revisión integral.
 
-**Integración con las dos placas, mediciones físicas y evidencias de ejecución:** [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA]
 
 ### 2.5 Diagramas de secuencia
 
-Los dos diagramas describen **comportamientos implementados** de los programas ESP32 y del servidor Python, conforme a la arquitectura de §2.1 y las clases de §2.4. Los mensajes y las distancias son ejemplos, no registros de ejecución. La asociación WiFi, el recorrido con ambas placas y la actuación física permanecen pendientes de evidencia. Cada mensaje de aplicación termina en LF (`\n`), omitido en las etiquetas; `5000` es el puerto predeterminado, sin afirmar una configuración del montaje verificada.
+Los dos diagramas describen **comportamientos implementados** de los programas ESP32 y del servidor Python, conforme a la arquitectura de §2.1 y las clases de §2.4. Los mensajes y las distancias son ejemplos, no registros de ejecución. La asociación WiFi, el recorrido y la actuación se documentan con evidencia física en §4.2. Cada mensaje de aplicación termina en LF (`\n`), omitido en las etiquetas; `5000` es el puerto predeterminado, sin afirmar una configuración del montaje verificada.
 
 #### 2.5.1 Registro y funcionamiento normal
 
@@ -689,17 +686,14 @@ Los ESP32 atienden `send` y `recv` con `MSG_DONTWAIT` y temporizadores basados e
 
 **Discrepancia respecto de la supervisión original.** El diseño inicial prevé 2000 ms desde la apertura sin registro completo o desde el último `POST` completo aceptado; los fragmentos no deberían renovar ese plazo. El servidor simplificado configura un timeout por operación: una llamada a `recv()` que recibe un fragmento puede dar paso a otra espera de hasta 2 s, aunque todavía no exista una línea completa. Por tanto, una sesión puede prolongarse más allá del plazo original. En ausencia de datos, un cliente no registrado recibe `ERROR reason=not_registered` y el manejador finaliza; un sensor registrado termina su atención y libera el rol; un actuador registrado puede permanecer en silencio y el manejador continúa esperando.
 
-**Ambas políticas no son equivalentes.** La diferencia queda pendiente de revisión técnica y pruebas específicas de fragmentos prolongados, especialmente PV-12 y PV-13, sin modificar los criterios de §1 ni atribuir al diagrama el plazo estricto anterior. El watchdog local del actuador limita la ausencia de comandos que consume, pero no demuestra que el servidor haya aplicado la política prevista.
+**Ambas políticas no son equivalentes.** La diferencia es una limitación no resuelta para fragmentos prolongados, especialmente en PV-12 y PV-13, sin modificar los criterios de §1 ni atribuir al diagrama el plazo estricto anterior. El watchdog local del actuador limita la ausencia de comandos que consume, pero no demuestra que el servidor haya aplicado la política prevista.
 
-Las pruebas disponibles de [cliente TCP](tests/native/cliente_tcp.cpp), [principal sensor](tests/native/principal_sensor.cpp), [principal actuador](tests/native/principal_actuador.cpp) y [controlador de LEDs](tests/native/controlador_leds.cpp) contienen casos de registro, envíos parciales, reintentos, watchdog, último comando y conservación de fase con red, reloj y GPIO simulados. Las del [servidor Python](tests/python/test_servidor.py) contemplan roles, registros, fragmentos, apagado y reconexión mediante sockets locales. Sus casos de timeout comprueban ausencia de datos; no acreditan el plazo original ante fragmentos que llegan durante una sesión prolongada. Esta revisión inspecciona los casos sin ejecutarlos ni declarar su aprobación. Las tablas de §4 y la especificación de §2.6 conservan identificados el alcance de estas pruebas y las discrepancias pendientes.
+Las pruebas disponibles de [cliente TCP](tests/native/cliente_tcp.cpp), [principal sensor](tests/native/principal_sensor.cpp), [principal actuador](tests/native/principal_actuador.cpp) y [controlador de LEDs](tests/native/controlador_leds.cpp) contienen casos de registro, envíos parciales, reintentos, watchdog, último comando y conservación de fase con red, reloj y GPIO simulados. Las del [servidor Python](tests/python/test_servidor.py) contemplan roles, registros, fragmentos, apagado y reconexión mediante sockets locales. Sus casos de timeout comprueban ausencia de datos; no acreditan el plazo original ante fragmentos que llegan durante una sesión prolongada. Esta revisión inspecciona los casos sin volver a ejecutarlos; §4.1.1 distingue los resultados anteriores y el registro CTest existente. Las tablas de §4 y la especificación de §2.6 conservan identificados el alcance de estas pruebas y las limitaciones técnicas.
 
-**Revisión técnica y pruebas específicas de PV-12/PV-13 con fragmentos prolongados:** [PENDIENTE DE EVIDENCIA]
-
-**Registros del recorrido con ambas placas, apagado y recuperación física, y mediciones de tiempos:** [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA]
 
 ### 2.6 Protocolo de aplicación TCP
 
-TCP transporta un flujo ordenado de bytes; una recepción del socket no equivale necesariamente a un mensaje completo. El protocolo del grupo define contenido, delimitación y significado para RF4. Se implementa en [protocolo.py](apps/servidor/protocolo.py) y en [ProtocoloAplicacion.h](apps/firmware/lib/Compartido/ProtocoloAplicacion.h) y [su implementación C++](apps/firmware/lib/Compartido/ProtocoloAplicacion.cpp), utilizados por los clientes ESP32. Las reglas de clasificación existen exclusivamente en Python. Esta sección distingue la sintaxis, las políticas de sesión y la validación pendiente, precisando los cambios frente al [diseño inicial](docs/diagramas/Diseno_del_sistema.md#6-especificación-del-protocolo-de-aplicación).
+TCP transporta un flujo ordenado de bytes; una recepción del socket no equivale necesariamente a un mensaje completo. El protocolo del grupo define contenido, delimitación y significado para RF4. Se implementa en [protocolo.py](apps/servidor/protocolo.py) y en [ProtocoloAplicacion.h](apps/firmware/lib/Compartido/ProtocoloAplicacion.h) y [su implementación C++](apps/firmware/lib/Compartido/ProtocoloAplicacion.cpp), utilizados por los clientes ESP32. Las reglas de clasificación existen exclusivamente en Python. Esta sección distingue la sintaxis, las políticas de sesión y el alcance de la validación, precisando los cambios frente al [diseño inicial](docs/diagramas/Diseno_del_sistema.md#6-especificación-del-protocolo-de-aplicación).
 
 #### 2.6.1 Codificación, delimitación y tamaño
 
@@ -743,7 +737,7 @@ Reconocer sintácticamente una línea no autoriza su uso en cualquier rol o esta
 | `SET` | PC → actuador | `SET redLed=<estado> yellowLed=<estado> greenLed=<estado>` | Cada estado: `off`, `on`, `blink_2` o `blink_4`. | Orden completa de tres LEDs; el cliente valida y conserva el último comando pendiente. |
 | `ERROR` | PC → cliente | `ERROR reason=<motivo>` | `invalid_message`, `not_registered` o `role_busy`. | El servidor intenta notificar el rechazo y finaliza la conexión afectada. |
 
-Los textos entre `< >` son variables descriptivas. `blink_2` y `blink_4` representan ciclos completos por segundo; el firmware implementa las alternancias locales de §1.2. La comprobación física de esas frecuencias sigue pendiente.
+Los textos entre `< >` son variables descriptivas. `blink_2` y `blink_4` representan ciclos completos por segundo; el firmware implementa las alternancias locales de §1.2. El expediente aporta observaciones visuales, sin una medida física exacta de esas frecuencias.
 
 Este intercambio ilustrativo distingue los dos sockets y sus direcciones; no constituye evidencia experimental:
 
@@ -793,85 +787,61 @@ Las políticas de sesión son independientes de la sintaxis:
 - Después del registro, el servidor admite únicamente `POST` del sensor. Un segundo registro o mensajes incompatibles con el rol producen `invalid_message`.
 - La sintaxis se comprueba primero: un `POST` válido sin registro produce `not_registered`, mientras que `POST distance=0` produce `invalid_message` incluso antes de registrar. Un rol ocupado produce `role_busy`.
 - `cerrar_con_error()` libera el rol afectado antes de intentar enviar `ERROR`, cierra la dirección de escritura y lee datos restantes antes de terminar. No se garantiza un plazo total estricto de cierre ni la entrega ante fallos de transporte. Liberar el sensor invalida su lectura y genera apagado para el actuador disponible.
-- `settimeout(2.0)` configura **2 s por operación de socket**. Sin datos, el cliente no registrado se rechaza y el sensor registrado termina su atención y libera el rol; el silencio del actuador es normal y permite continuar esperando. Recibir fragmentos puede iniciar nuevas esperas sin completar un mensaje. Esto no equivale al plazo original desde el último `POST` completo, aunque `invalid` sí se procesa como una lectura completa. La diferencia de PV-12/PV-13 sigue pendiente.
+- `settimeout(2.0)` configura **2 s por operación de socket**. Sin datos, el cliente no registrado se rechaza y el sensor registrado termina su atención y libera el rol; el silencio del actuador es normal y permite continuar esperando. Recibir fragmentos puede iniciar nuevas esperas sin completar un mensaje. Esto no equivale al plazo original desde el último `POST` completo, aunque `invalid` sí se procesa como una lectura completa. La diferencia de PV-12/PV-13 permanece como limitación de la implementación.
 - Los ESP32 realizan sus propios reintentos y repiten el registro al reconectar. El actuador apaga ante pérdida de registro o 2000 ms sin consumir un comando válido; en este último caso mantiene TCP si sigue abierto. La recepción de fragmentos no renueva ese watchdog. Parámetros, bloqueos y recuperación se detallan en §2.5.
 
-#### 2.6.6 Pruebas disponibles y validación pendiente
+#### 2.6.6 Pruebas disponibles y alcance de validación
 
 El contrato JSON y el verificador de compatibilidad cruzada fueron eliminados; **no son mecanismos actuales de prueba**. Las implementaciones deben interoperar según la especificación, pero las suites actuales verifican escenarios concretos y no acreditan equivalencia exhaustiva entre todos los valores o sesiones posibles.
 
 [protocolo_aplicacion.cpp](tests/native/protocolo_aplicacion.cpp) comprueba las tres operaciones C++, buffers, normalización y rechazo de comandos; [receptor_lineas.cpp](tests/native/receptor_lineas.cpp) comprueba fragmentos, longitud y delimitación; [cliente_tcp.cpp](tests/native/cliente_tcp.cpp) comprueba registro, transporte, último comando y recuperación con red simulada. [test_protocolo.py](tests/python/test_protocolo.py) verifica el dominio y el protocolo Python; [test_servidor.py](tests/python/test_servidor.py) y [test_simuladores.py](tests/python/test_simuladores.py) contienen escenarios mediante sockets locales y clientes simulados. Su disponibilidad no constituye aprobación de las pruebas ni evidencia de WiFi real.
 
-La auditoría previa identificó **191 comprobaciones C++ y 26 métodos Python**, con ejecución reportada por el equipo sin registros confirmados entonces. En la actualización de rangos y Lejos del 15/11/2026 se ejecutaron seis suites C++ (230/230 comprobaciones) y, por separado, los 26 métodos Python (26/26). Se verificó la lógica nueva con simulación y TCP local; las mediciones físicas y la incorporación de sus evidencias siguen pendientes.
+La auditoría previa identificó **191 comprobaciones C++ y 26 métodos Python**, con ejecución reportada por el equipo sin registros confirmados entonces. En la actualización de rangos y Lejos del 15/11/2026 se ejecutaron seis suites C++ (230/230 comprobaciones) y, por separado, los 26 métodos Python (26/26). Se verificó la lógica nueva con simulación y TCP local; la evidencia física se incorpora en §4 y la ubicación original del registro CTest se indica en §8.2.
 
-**Resultados verificables de ejecución y comunicación con ambas placas:** [PENDIENTE DE EVIDENCIA]
-
-**Mediciones de exactitud, estabilidad, respuesta y frecuencia:** [PENDIENTE DE MEDICIÓN]
 
 ### 2.7 Matriz de trazabilidad
 
-La matriz conserva RF1–RF4 y RNF1–RNF5 de §1 y relaciona la implementación real de §2.4 con pruebas disponibles y validaciones previstas. **Implementado no significa validado físicamente.** Las suites nativas utilizan hardware, reloj y red simulados; las pruebas Python de protocolo son lógicas y las de servidor y simuladores utilizan sockets locales. Las comprobaciones físicas siguen el procedimiento de [PRUEBAS_FISICAS.md](docs/PRUEBAS_FISICAS.md), sin convertir sus expectativas en resultados.
+La matriz relaciona criterios, componentes reales, pruebas y resultados. El PDF físico y el registro CTest aportan evidencia de naturaleza distinta; los límites de cobertura se explican en §4. Los nombres de suites corresponden a sus archivos enlazados en §4.1.1.
 
-Para identificar las suites se utilizan sus archivos reales: [protocolo_aplicacion](tests/native/protocolo_aplicacion.cpp), [receptor_lineas](tests/native/receptor_lineas.cpp), [cliente_tcp](tests/native/cliente_tcp.cpp), [controlador_leds](tests/native/controlador_leds.cpp), [principal_sensor](tests/native/principal_sensor.cpp), [principal_actuador](tests/native/principal_actuador.cpp), [test_protocolo](tests/python/test_protocolo.py), [test_servidor](tests/python/test_servidor.py) y [test_simuladores](tests/python/test_simuladores.py). Los nombres en las tablas remiten a estas suites disponibles, no a resultados aprobados.
-
-| Requisito y criterio conservado | Componentes implementados | Pruebas automatizadas disponibles y alcance | Validación física o revisión prevista | Estado de evidencia |
+| Requisito | Implementación responsable | Automatización relacionada | Evidencia física / resultado | Evaluación |
 |---|---|---|---|---|
-| RF1: medir distancia e identificar lecturas inválidas. | `SensorUltrasonico`, `PrincipalSensor`, `ProtocoloAplicacion` y `ClienteTcp` del sensor. | `principal_sensor`: eco, conversión, publicación e invalidez con hardware simulado; `protocolo_aplicacion`: codificación. PV-04. | PV-04 y PN-02 con HC-SR04 y referencia graduada. | Código disponible; [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA]. |
-| RF2: cuatro rangos contiguos sin solapamiento y límites de §1.2. | `ControlDistancia.calcular_comando()` Python, invocado por `EstadoSistema.nueva_lectura()`. | `test_protocolo`: dominio; `test_servidor`: 5/5.01/15/15.01/25/25.01/50/100 y comandos mediante sockets locales. PV-01 a PV-03. | PV-01 a PV-03 y PF-01: comparar lectura y actuación, distinguiendo el error físico del límite lógico exacto. | Implementación disponible; ejecución y recorrido físico: [PENDIENTE DE EVIDENCIA]. |
-| RF3: rojo 4 Hz, amarillo y verde 2 Hz, Lejos con los tres a 2 Hz e invalidez con todos apagados. | Dominio Python, `PrincipalActuador`, `ClienteTcp` y `ControladorLeds`. | `controlador_leds` y `principal_actuador`: modos, fase, aplicación y apagado con GPIO simulados; `test_servidor`: generación de comandos. PV-01 a PV-05. | PV-01 a PV-05; PF-01 a PF-03: color, apagado, parpadeo y lectura inválida observados. | [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA]. |
-| RF4: recorrido `POST` → clasificación → `SET` mediante TCP sobre WiFi. | Ambos `ClienteTcp`, programas principales, protocolo C++, `ServidorTcp`, `ManejadorConexion`, `Cliente` y `EstadoSistema`. | `cliente_tcp`, `receptor_lineas`, `protocolo_aplicacion` y principales: red simulada; `test_servidor` y `test_simuladores`: sockets locales. PV-06 a PV-16 con las limitaciones de la tabla siguiente. | Registro y recorrido con ambas placas, registros serie/TCP y recuperación PF-04; PV-06 a PV-16 según escenario. | WiFi real e integración: [PENDIENTE DE EVIDENCIA]; plazos y estados intermedios pendientes de revisión. |
-| RNF1: ≥ 10 minutos continuos, sin reinicios ni bloqueos. | Sistema completo; supervisión y recuperación en clientes y servidor. | Suites de clientes, principales y servidor: fallos y recuperación en escenarios acotados; no demuestran estabilidad física de 10 minutos. | PN-01: registrar eventos de los tres equipos y continuidad del recorrido. | [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA]. |
-| RNF2: error absoluto máximo ≤ 3 cm en 3–150 cm. | HC-SR04, `SensorUltrasonico`, codificador y publicación del sensor. | `principal_sensor` y `protocolo_aplicacion`: conversión y representación con datos controlados; no miden exactitud del HC-SR04. | PN-02: referencias, repeticiones y máximo de los errores individuales, cubriendo extremos y rangos. | [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA]. |
-| RNF3: respuesta visible extremo a extremo ≤ 1 s desde el cambio físico. | Adquisición, clientes, servidor Python y controlador de LEDs. | Pruebas de temporizadores y control con reloj simulado; sockets locales sin medición física extremo a extremo. | PN-03: objeto y LEDs con referencia temporal común; medir desde el cambio físico, no solo desde recepción de `POST`. | [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA]. |
-| RNF4: ≥ 2 lecturas/s adquiridas. | `PrincipalSensor` con intervalo nominal de 250 ms, `SensorUltrasonico` y `ClienteTcp`. | `principal_sensor`: cadencia condicionada, registro y envío pendiente con reloj simulado; `test_simuladores`: analizador de registros. | PN-04: contar adquisiciones en una ventana conocida y contrastar separadamente `POST` recibidos e inválidos. | Cadencia nominal no equivale a frecuencia medida: [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA]. |
-| RNF5: modularidad, POO, documentación y convenciones de C++ y Python. | Clases y módulos vigentes de §2.4; tipos y protocolo en `apps/firmware/lib/Compartido/`. | Las suites aportan comprobaciones de comportamiento, no certifican por sí mismas calidad del código. | Revisión de §3.4 por criterio, sobre una versión identificada: responsabilidades, interfaces, dependencias, sincronización, nombres y comentarios, con referencias al código. | Revisión integral documentada: [PENDIENTE DE EVIDENCIA]. |
+| RF1 | SensorUltrasonico, PrincipalSensor, ProtocoloAplicacion y ClienteTcp sensor. | principal_sensor y protocolo_aplicacion. | PF-01/PF-02/PF-06; capturas 3/10/20/35 cm e invalidez. | Adquisición y publicación verificadas. |
+| RF2 | ControlDistancia Python y EstadoSistema. | test_protocolo, test_servidor y test_simuladores; límites 5/5.01/15/15.01/25/25.01/50/100. | PF-03; PV-01–PV-03; muestras interiores y SET Lejos. | Rangos coherentes; límites exactos con entradas controladas. |
+| RF3 | Dominio Python, PrincipalActuador y ControladorLeds. | controlador_leds, principal_actuador y test_servidor. | PF-04/PF-05/PF-06; actuación, invalidez y video. | Actuación observada; 4/2 Hz son nominales, no mediciones físicas exactas. |
+| RF4 | ClienteTcp en ambos ESP32, protocolo C++/Python y servidor. | cliente_tcp, receptores, principales, test_servidor/test_simuladores; PV-06–PV-16. | PF-07/PF-08; POST/SET, registro y recuperación tras role_busy. | Recorrido documentado; cobertura particular de cada PV en §4.2.4. |
+| RNF1 | Sistema completo y recuperación de clientes/servidor. | Pruebas acotadas de errores y recuperación. | PF-09 / PN-01: 24 min sin eventos adversos registrados. | Cumple en la sesión de estabilidad. |
+| RNF2 | HC-SR04, adquisición y codificación. | Conversión/codificación con datos controlados; no sustituyen exactitud física. | PF-10 / PN-02: 21 lecturas, error máximo individual 0.90 cm. | Tolerancia cumplida en 5–40 cm; 3–150 cm sin cobertura completa. |
+| RNF3 | Adquisición → TCP → servidor → actuador. | Temporizadores simulados y sockets locales. | PF-11 / PN-03: 0.42–0.62 s, promedio 0.526 s. | Los cinco ensayos cumplen el límite de 1 s. |
+| RNF4 | Planificación del sensor y transporte de lecturas. | principal_sensor: intervalo y capacidad de envío. | PF-12 / PN-04: 39/10=3.9 lecturas/s. | Supera el mínimo de 2 lecturas/s; alcance del indicador en §4.6. |
+| RNF5 | Módulos C++/Python, interfaces y documentación. | Seis suites C++ y 26 métodos Python; compilaciones previas. | Revisión de §3.4 sobre 3a25f24; no es una prueba física. | Criterios estructurales respaldados y limitaciones declaradas. |
 
-La siguiente relación delimita la cobertura disponible de los 16 casos funcionales. No sustituye sus criterios originales ni las tablas de ejecución de §4.
-
-| Casos | Suites relacionadas | Alcance y aspectos pendientes |
-|---|---|---|
-| PV-01 a PV-03 | `test_protocolo`, `test_servidor`, `test_simuladores`; `controlador_leds`. | Rangos, límites y estados con entradas controladas; actuación física pendiente. |
-| PV-04 y PV-05 | `principal_sensor`, `protocolo_aplicacion`, `principal_actuador`, `controlador_leds`; pruebas Python de invalidez. | Timeout de eco simulado, apagado y conservación de fase; comprobar sensor y frecuencias reales. |
-| PV-06 y PV-07 | `test_servidor`, `test_simuladores`, `cliente_tcp`. | Orden de registro, confirmación y rol ocupado; evidencia del montaje pendiente. |
-| PV-08 y PV-09 | `receptor_lineas`, `cliente_tcp`, `principal_actuador`, `test_servidor`. | Fragmentos y bloques con varios mensajes; el actuador conserva solo el último `SET` pendiente. Revisar la expectativa de aplicación de estados intermedios sin cambiar el caso original. |
-| PV-10 y PV-11 | `protocolo_aplicacion`, `receptor_lineas`, `cliente_tcp`, `test_protocolo`, `test_servidor`. | Longitud, sintaxis, caracteres y rol; una línea de longitud válida aún debe superar la sintaxis. |
-| PV-12 y PV-13 | `cliente_tcp`, `test_servidor`, `principal_sensor`. | Plazo local de registro y silencio de socket; faltan pruebas específicas de fragmentos prolongados frente al plazo original del servidor. |
-| PV-14 y PV-15 | `principal_actuador`, `cliente_tcp`, `principal_sensor`, `test_servidor`. | Watchdog, desconexión y reconexión simulados/locales; recuperación física y tiempos pendientes, con reintento WiFi de 2 s inicial y luego 10 s. |
-| PV-16 | `test_servidor`, `principal_actuador`. | Hay escenarios de lectura reciente y reconexión; completar evidencia de las variantes reciente, inválida, antigua e inexistente, sin presumir cobertura integral aprobada. |
-
-El inventario vigente contiene 230 comprobaciones C++ y 26 métodos Python, ejecutados satisfactoriamente durante la actualización de control del 15/11/2026. Esta ejecución local es distinta del reporte histórico de 191 comprobaciones; no acredita el recorrido físico ni el cumplimiento experimental de los requisitos.
-
-El procedimiento de PN-01 a PN-04 está armonizado con §1: PN-02 incluye 3 cm; PN-03 toma como origen el cambio físico de rango; PN-04 separa adquisiciones, lecturas inválidas y recepción TCP; PN-01 exige eventos y continuidad de ambos ESP32 y del servidor. La actualización del procedimiento no equivale a ejecutar los ensayos ni acredita resultados.
-
-**Registros de ejecución, revisión de discrepancias y evidencias por requisito:** [PENDIENTE DE EVIDENCIA]
-
-**Validaciones físicas PN-01 a PN-04:** [PENDIENTE DE MEDICIÓN]
+PV-08 a PV-11 se respaldan mediante pruebas de software, no mediante inyecciones físicas documentadas. PV-12/PV-13 conservan la diferencia entre silencio de socket y plazo desde la última línea completa; PV-14 renueva el watchdog al consumir SET. PV-15 tiene evidencia de recuperación del registro, no de todas las fallas WiFi posibles; PV-16 no dispone de cuatro capturas físicas separadas. Estas restricciones forman parte del resultado y no se ocultan con una aprobación global.
 
 ## 3. Desarrollo e Implementación
 
-El proyecto dispone de los dos firmwares ESP32, el servidor Python y el protocolo de comunicación. Se describe el código disponible y su configuración reproducible. El equipo confirma el desarrollo y montaje físico conjuntos y el funcionamiento integrado; la documentación fotográfica, los registros de esa integración y los resultados experimentales siguen pendientes de incorporación. Los fragmentos siguientes se transcriben de los archivos actuales y muestran decisiones concretas relacionadas con RF1–RF4; no sustituyen las declaraciones completas ni acreditan cumplimiento experimental.
+El proyecto dispone de los dos firmwares ESP32, el servidor Python y el protocolo de comunicación. Se describe el código disponible y su configuración reproducible. El equipo realizó el montaje conjunto y la integración; fotografías, registros y resultados experimentales se incorporan en §4 y §8. Los fragmentos siguientes se transcriben de los archivos actuales y muestran decisiones concretas relacionadas con RF1–RF4; no sustituyen las declaraciones completas ni acreditan cumplimiento experimental.
 
 ### 3.1 Montaje y configuración
 
-La [guía de montaje](docs/GUIA_MONTAJE.md) define dos circuitos independientes, coherentes con §2.2 y §2.3. Santiago y Ariel confirman el desarrollo y montaje conjuntos, la conexión de ambos ESP32 al servidor y el funcionamiento de la clasificación. La configuración definitiva utiliza TRIG=GPIO23 (D23), ECHO=GPIO18 (D18), sensor con Micro-USB y actuador con USB-C. Falta incorporar fotografías, identificación del equipo y registros que contrasten el montaje con los esquemas; esta confirmación no sustituye las mediciones eléctricas ni PN-01 a PN-04.
+La [guía de montaje](docs/GUIA_MONTAJE.md) define dos circuitos independientes, coherentes con §2.2 y §2.3. Santiago y Ariel confirman el desarrollo y montaje conjuntos, la conexión de ambos ESP32 al servidor y el funcionamiento de la clasificación. La configuración definitiva utiliza TRIG=GPIO23 (D23), ECHO=GPIO18 (D18), sensor con Micro-USB y actuador con USB-C. Las fotografías y registros permiten contrastar el montaje con los esquemas; PN-01 a PN-04 presentan los resultados físicos y sus límites de cobertura.
 
 | Objeto | Componentes y conexiones definidos | Verificación del montaje |
 |---|---|---|
-| Sensor | ESP32 DEVKIT V1 de 30 pines con Micro-USB, HC-SR04, protoboard y cables; VCC a VIN/5 V del USB, GND común y TRIG a GPIO23. ECHO pasa por R1 de 2.2 kΩ hasta el nodo de GPIO18, y desde ese nodo por R2 y R3 de 2.2 kΩ en serie hacia GND. | Divisor, alimentación y correspondencia física de pines: [PENDIENTE DE EVIDENCIA]. |
-| Actuador | ESP32 genérico de 38 pines con USB-C, tres LEDs y una resistencia de 220 Ω por LED. Verde en GPIO25, amarillo en GPIO26 y rojo en GPIO27; cada GPIO conecta al ánodo, y el cátodo a su resistencia y GND. | Polaridad, resistencias y salidas reales: [PENDIENTE DE EVIDENCIA]. |
-| Infraestructura | Dos cables USB de datos, PC Windows y red WiFi de 2.4 GHz con conectividad entre equipos. Alimentación por USB y GND común dentro de cada objeto. | Puertos COM, red, conectividad y condiciones del ensayo: [PENDIENTE DE EVIDENCIA]. |
+| Sensor | ESP32 DEVKIT V1 de 30 pines con Micro-USB, HC-SR04, protoboard y cables; VCC a VIN/5 V del USB, GND común y TRIG a GPIO23. ECHO pasa por R1 de 2.2 kΩ hasta el nodo de GPIO18, y desde ese nodo por R2 y R3 de 2.2 kΩ en serie hacia GND. | Fotografía en §2.2, referencias con regla y publicaciones en §4.2; tensión nominal calculada en §2.2. |
+| Actuador | ESP32 genérico de 38 pines con USB-C, tres LEDs y una resistencia de 220 Ω por LED. Verde en GPIO25, amarillo en GPIO26 y rojo en GPIO27; cada GPIO conecta al ánodo, y el cátodo a su resistencia y GND. | Fotografía en §2.3 y actuación visual en §4.2; sin medición eléctrica adicional. |
+| Infraestructura | Dos cables USB de datos, PC Windows y red WiFi de 2.4 GHz con conectividad entre equipos. Alimentación por USB y GND común dentro de cada objeto. | Capturas de WiFi/TCP, IP y puertos serie de la sesión en §4.1. |
 
-La adaptación de ECHO utiliza el divisor diseñado de §2.2, cuya tensión ideal es aproximadamente 3.33 V. El montaje fue realizado según declaración del equipo; su evidencia y la medición de la tensión real siguen pendientes. No se reutiliza como evidencia el circuito único de la Práctica 1.
+La adaptación de ECHO utiliza el divisor diseñado de §2.2, cuya tensión ideal es aproximadamente 3.33 V. Las fotografías documentan el montaje; no se registra una medición de la tensión real del divisor. No se reutiliza como evidencia el circuito único de la Práctica 1.
 
 | Elemento | Implementación/configuración del repositorio | Datos de la ejecución real |
 |---|---|---|
-| Firmware | C++ con Arduino-ESP32 2.0.17; `espressif32@7.0.1` y paquete `framework-arduinoespressif32@3.20017.0` fijados en [platformio.ini](platformio.ini). Monitor serie a 115200 baudios. | Herramientas instaladas, carga efectiva y registros: [PENDIENTE DE EVIDENCIA]. |
-| Entorno `sensor` | Predeterminado; placa `esp32doit-devkit-v1`; selecciona `PrincipalSensor.cpp`, `ClienteTcp.cpp` y `SensorUltrasonico.cpp`. | Placa y puerto COM utilizados: [PENDIENTE DE EVIDENCIA]. |
-| Entorno `actuador` | Placa `esp32dev`; selecciona `PrincipalActuador.cpp`, `ClienteTcp.cpp` y `ControladorLeds.cpp`. Ambos entornos comparten `apps/firmware/lib/Compartido/`. | Placa y puerto COM utilizados: [PENDIENTE DE EVIDENCIA]. |
-| Servidor PC | Python 3.13 y biblioteca estándar; entrada `apps.servidor`, escucha IPv4 predeterminada en `0.0.0.0:5000`. | Versión ejecutada, interfaz, IPv4 y puerto efectivos: [PENDIENTE DE EVIDENCIA]. |
-| Red y servicio | Configuración local mediante SSID, clave, IPv4 de la PC y puerto; red con tráfico TCP permitido. | Asociación WiFi, ausencia de aislamiento entre clientes y acceso al servicio: [PENDIENTE DE EVIDENCIA]. |
+| Firmware | C++ con Arduino-ESP32 2.0.17; `espressif32@7.0.1` y paquete `framework-arduinoespressif32@3.20017.0` fijados en [platformio.ini](platformio.ini). Monitor serie a 115200 baudios. | Monitores a 115200 baudios en PDF p. 4; compilaciones previas documentadas en §4.1.1. |
+| Entorno `sensor` | Predeterminado; placa `esp32doit-devkit-v1`; selecciona `PrincipalSensor.cpp`, `ClienteTcp.cpp` y `SensorUltrasonico.cpp`. | Micro-USB; COM7 en la captura de la sesión. |
+| Entorno `actuador` | Placa `esp32dev`; selecciona `PrincipalActuador.cpp`, `ClienteTcp.cpp` y `ControladorLeds.cpp`. Ambos entornos comparten `apps/firmware/lib/Compartido/`. | USB-C; COM3 en la captura de la sesión. |
+| Servidor PC | Python 3.13 y biblioteca estándar; entrada `apps.servidor`, escucha IPv4 predeterminada en `0.0.0.0:5000`. | 172.20.10.2:5000 en la captura; versión del intérprete físico no indicada. Python 3.13 es el entorno declarado y 3.12.6 el de la automatización previa. |
+| Red y servicio | Configuración local mediante SSID, clave, IPv4 de la PC y puerto; red con tráfico TCP permitido. | WiFi y registro aceptado visibles; SSID y modelo de punto de acceso no especificados. |
 
-[ConfiguracionRed.example.h](apps/firmware/include/ConfiguracionRed.example.h) se copia a `ConfiguracionRed.h` y se completan `SSID`, `CLAVE`, `IP_SERVIDOR` y `PUERTO`. El ejemplo contiene SSID vacío e IP `0.0.0.0`: con esos valores el cliente deshabilita los intentos. La dirección de escucha `0.0.0.0` no es un destino válido para las placas; deben utilizar la IPv4 real de la PC. No se publican credenciales ni se presume una configuración operativa.
+[ConfiguracionRed.example.h](apps/firmware/include/ConfiguracionRed.example.h) se copia a `ConfiguracionRed.h` y se completan `SSID`, `CLAVE`, `IP_SERVIDOR` y `PUERTO`. El ejemplo contiene SSID vacío e IP `0.0.0.0`: con esos valores el cliente deshabilita los intentos. La dirección de escucha `0.0.0.0` no es un destino válido para las placas; deben utilizar la IPv4 real de la PC. No se publican credenciales; las capturas documentan la asociación y el registro efectivos de la sesión.
 
 Los pasos reproducibles están en el [README](README.md#ejecutar). Los comandos siguientes son instrucciones documentadas, **no ejecutadas en esta iteración**; `COMx` y `COMy` deben sustituirse por los puertos identificados:
 
@@ -879,7 +849,7 @@ Los pasos reproducibles están en el [README](README.md#ejecutar). Los comandos 
 Copy-Item apps/firmware/include/ConfiguracionRed.example.h apps/firmware/include/ConfiguracionRed.h
 pio run -e sensor -t upload --upload-port COMx
 pio run -e actuador -t upload --upload-port COMy
-py -3.13 -m apps.servidor --ip 0.0.0.0 --puerto 5000 --registro docs/evidencias/p2/servidor.log
+py -3.13 -m apps.servidor --ip 0.0.0.0 --puerto 5000 --registro docs/evidencias/servidor.log
 ```
 
 Antes de cargar se completa la configuración local. Para el montaje se inicia el servidor y se observan ambas consolas serie y los registros de roles. La opción `--registro` permite conservar el intercambio del servidor para los ensayos; su disponibilidad no significa que el archivo de evidencia ya exista.
@@ -890,9 +860,9 @@ Los programas contienen `setup()` y `loop()` del framework Arduino, no clases ar
 
 | Módulo | Clases o funciones | Responsabilidad | Archivo real | Estado |
 |---|---|---|---|---|
-| Sensor | `setup`, `loop`; `SensorUltrasonico`. | Inicializar TRIG/ECHO, adquirir y planificar la publicación. | [PrincipalSensor.cpp](apps/firmware/src/PrincipalSensor.cpp), [SensorUltrasonico.cpp](apps/firmware/src/SensorUltrasonico.cpp). | Implementado; exactitud y cadencia físicas pendientes. |
-| Actuador | `setup`, `loop`, `apagarPorAusencia`; `ControladorLeds`. | Consumir comandos, mantener modos y supervisar el apagado. | [PrincipalActuador.cpp](apps/firmware/src/PrincipalActuador.cpp), [ControladorLeds.cpp](apps/firmware/src/ControladorLeds.cpp). | Implementado; actuación física pendiente. |
-| Cliente común | `ClienteTcp`. | Gestionar WiFi/TCP, registro, buffers, envío, recepción y reintentos por placa. | [ClienteTcp.h](apps/firmware/include/ClienteTcp.h), [ClienteTcp.cpp](apps/firmware/src/ClienteTcp.cpp). | Implementado; funcionamiento integrado confirmado por el equipo, registros pendientes de incorporación. |
+| Sensor | `setup`, `loop`; `SensorUltrasonico`. | Inicializar TRIG/ECHO, adquirir y planificar la publicación. | [PrincipalSensor.cpp](apps/firmware/src/PrincipalSensor.cpp), [SensorUltrasonico.cpp](apps/firmware/src/SensorUltrasonico.cpp). | Adquisición y publicación verificadas; exactitud en PN-02 y frecuencia observada en PN-04. |
+| Actuador | `setup`, `loop`, `apagarPorAusencia`; `ControladorLeds`. | Consumir comandos, mantener modos y supervisar el apagado. | [PrincipalActuador.cpp](apps/firmware/src/PrincipalActuador.cpp), [ControladorLeds.cpp](apps/firmware/src/ControladorLeds.cpp). | Fotografía en §2.3 y actuación visual en §4.2; sin medición eléctrica adicional. |
+| Cliente común | `ClienteTcp`. | Gestionar WiFi/TCP, registro, buffers, envío, recepción y reintentos por placa. | [ClienteTcp.h](apps/firmware/include/ClienteTcp.h), [ClienteTcp.cpp](apps/firmware/src/ClienteTcp.cpp). | Implementado; registros de comunicación en PDF p. 4. |
 
 **Sensor: adquisición condicionada y publicación (RF1 y RF4).** El principal atiende el cliente antes de adquirir. Al aceptar el registro habilita una primera medición nueva; las siguientes requieren el intervalo nominal de 250 ms y capacidad de envío. El siguiente fragmento de `PrincipalSensor.cpp` omite la medición cuando el envío anterior sigue pendiente:
 
@@ -941,7 +911,7 @@ La validación de `SET` precede a ese almacenamiento. El flujo TCP conserva el o
     led.pendiente = true;
 ```
 
-Mantener un modo idéntico conserva su fase; cambiarlo señala su aplicación en el siguiente `actualizar()`. Como excepción de entrada al parpadeo conjunto, si el comando cambia a tres `blink_2`, `establecerEstados()` marca los tres LEDs como pendientes, incluso si uno ya estaba a 2 Hz. Así comparten instante de inicio y nivel; repetir Lejos no reinicia esa fase y salir conserva el comportamiento individual existente. El controlador alterna cada 125 ms para 4 Hz y cada 250 ms para 2 Hz, usando `millis()` sin `delay()` para el parpadeo. Tras una espera larga se resincroniza y evita encadenar alternancias atrasadas. Las frecuencias visibles siguen pendientes de medición.
+Mantener un modo idéntico conserva su fase; cambiarlo señala su aplicación en el siguiente `actualizar()`. Como excepción de entrada al parpadeo conjunto, si el comando cambia a tres `blink_2`, `establecerEstados()` marca los tres LEDs como pendientes, incluso si uno ya estaba a 2 Hz. Así comparten instante de inicio y nivel; repetir Lejos no reinicia esa fase y salir conserva el comportamiento individual existente. El controlador alterna cada 125 ms para 4 Hz y cada 250 ms para 2 Hz, usando `millis()` sin `delay()` para el parpadeo. Tras una espera larga se resincroniza y evita encadenar alternancias atrasadas. Las frecuencias físicas exactas no fueron cuantificadas; la observación visual se describe en §4.2.2.
 
 `PrincipalActuador.cpp` inicia el plazo al observar el registro y lo renueva al consumir un comando válido. El fragmento siguiente apaga por ausencia de comandos y continúa actualizando el controlador:
 
@@ -960,10 +930,10 @@ La PC concentra la decisión de control. [servidor.py](apps/servidor/servidor.py
 
 | Componente | Responsabilidad implementada | Archivo |
 |---|---|---|
-| `ServidorTcp` | Heredar `ThreadingTCPServer`, crear el estado común, registrar conexiones abiertas y cerrar el servicio. | [servidor.py](apps/servidor/servidor.py) |
+| `ServidorTcp` | Heredar `ThreadingTCPServer`, crear el estado común, registrar conexiones abiertas y cerrar el servicio. | Implementado; conexión con las placas documentada en PDF p. 4. |
 | `ManejadorConexion` | Recibir bloques, reconstruir líneas, aplicar reglas de sesión y finalizar conexiones. | [servidor.py](apps/servidor/servidor.py) |
 | `Cliente` | Conservar socket y rol; serializar envíos con un bloqueo propio. | [servidor.py](apps/servidor/servidor.py) |
-| `EstadoSistema` | Coordinar roles, antigüedad de lectura, clasificación y envío de actuación. | [servidor.py](apps/servidor/servidor.py) |
+| `EstadoSistema` | Coordinar roles, antigüedad de lectura, clasificación y envío de actuación. | Implementado; plazo por operación y bloqueo global identificados como limitaciones. |
 | `ControlDistancia`, `ComandoLeds`, `EstadoLed` | Aplicar los rangos de §1.2 y representar la actuación sin dependencias de hardware. | [dominio.py](apps/servidor/dominio.py) |
 | Funciones de protocolo y `ReceptorLineas` Python | Validar sintaxis, construir mensajes y separar líneas del flujo. | [protocolo.py](apps/servidor/protocolo.py) |
 | Tipos, `ProtocoloAplicacion` y `ReceptorLineas` C++ | Representar datos y adaptar el protocolo para ambos clientes. | [Tipos.h](apps/firmware/lib/Compartido/Tipos.h), [ProtocoloAplicacion.cpp](apps/firmware/lib/Compartido/ProtocoloAplicacion.cpp), [ReceptorLineas.cpp](apps/firmware/lib/Compartido/ReceptorLineas.cpp) |
@@ -990,7 +960,7 @@ El dominio produce rojo a 4 Hz para 0 < d ≤ 5 cm, amarillo a 2 Hz para 5 < d �
 
 El bloqueo evita intercalar líneas cuando el hilo del sensor escribe en el socket del actuador. `codificar()` valida y añade LF, y `sendall()` atiende la transmisión sin una cola de envío propia. `EstadoSistema` protege los roles con otro `Lock`; los envíos de registro y actuación pueden realizarse mientras ese bloqueo está tomado. Un envío lento retrasa otras operaciones, por lo que esta concurrencia no prueba el tiempo extremo a extremo de RNF3.
 
-**Errores y protocolo.** Un rol ocupado conserva al cliente original; sintaxis o mensajes incompatibles producen rechazo. `cerrar_con_error()` libera el rol afectado antes de intentar enviar `ERROR`. Liberar el sensor invalida su lectura y ordena apagar al actuador accesible. El socket tiene timeout de 2 s por operación: los fragmentos pueden permitir nuevas esperas y prolongar la sesión. Esta limitación difiere del plazo original desde el último mensaje completo y requiere los ensayos específicos de PV-12/PV-13.
+**Errores y protocolo.** Un rol ocupado conserva al cliente original; sintaxis o mensajes incompatibles producen rechazo. `cerrar_con_error()` libera el rol afectado antes de intentar enviar `ERROR`. Liberar el sensor invalida su lectura y ordena apagar al actuador accesible. El socket tiene timeout de 2 s por operación: los fragmentos pueden permitir nuevas esperas y prolongar la sesión. Esta limitación difiere del plazo original desde el último mensaje completo y no se considera resuelta por los ensayos de silencio de PV-12/PV-13.
 
 La biblioteca C++ común contiene únicamente tipos y adaptación del protocolo, sin ejecutar Python ni clasificar distancias. `ProtocoloAplicacion` ofrece `crearRegistro()`, `crearLectura()` y `leerComando()`; el receptor reconstruye líneas antes de interpretarlas. Este fragmento de `ProtocoloAplicacion.cpp` normaliza valores no finitos o inferiores a `0.01F`:
 
@@ -1004,256 +974,272 @@ El resto de las lecturas se construye con dos decimales; `leerComando()` valida 
 
 ### 3.4 Revisión de calidad del código
 
-La inspección estructural proporciona ejemplos concretos para RNF5, pero no certifica por sí sola una revisión integral ni la ejecución correcta. La revisión final debe identificar la versión evaluada, registrar cada criterio, sus referencias y los ajustes pendientes.
+La revisión documental del 17/11/2026 contrasta el código de **3a25f24** con sus cabeceras, llamadas, diagramas y filtros de compilación. No modifica lógica ni equivale a una certificación exhaustiva del software. RNF5 se evalúa con criterios concretos:
 
-| Criterio RNF5 | Hallazgos y limitaciones de la implementación | Evidencia de revisión |
+| Criterio | Evidencia inspeccionada | Resultado de revisión |
 |---|---|---|
-| Modularidad y responsabilidades | El sensor adquiere y publica; el dominio Python clasifica; el actuador ejecuta estados. Los programas coordinan objetos sin convertirse en clases ficticias. | Archivos y llamadas de §3.2 y §3.3; revisión integral: [PENDIENTE DE EVIDENCIA]. |
-| Orientación a objetos y encapsulación | `SensorUltrasonico` oculta pines; `ControladorLeds` conserva estados y tiempos por LED; `ClienteTcp` encapsula socket, buffers y registro. Python separa cliente, manejador y estado común. | Cabeceras enlazadas en §2.4 y fragmentos anteriores; revisión completa pendiente. |
-| Dependencias y reutilización | La biblioteca común C++ no administra GPIO ni sockets; el dominio Python no depende del hardware. Ambos programas reutilizan el cliente y los tipos, con instancias independientes. | Rutas de módulos y filtros de `platformio.ini`; [PENDIENTE DE EVIDENCIA] para revisión final. |
-| Sincronización y manejo de errores | Hay bloqueo por socket y por estado, validación completa y limpieza al reconectar. Los envíos con bloqueo global pueden demorar otros hilos; el timeout por operación no aplica el plazo original estricto. | `Cliente.enviar()`, `EstadoSistema` y `ManejadorConexion`; ensayos y decisiones sobre limitaciones pendientes. |
-| Nombres, comentarios y temporización | Constantes identifican unidades y plazos; comentarios explican fase, desbordamiento y descartes. Se usan resta sin signo y buffers acotados. | Fragmentos y cabeceras; comprobar consistencia de todas las interfaces: [PENDIENTE DE EVIDENCIA]. |
-| Validación y documentación | Hay suites y simuladores, pero faltan registros verificables y observaciones físicas. Deben contrastarse documentación y comportamiento, sin dar por aprobados todos los criterios. | §4 y matriz de §2.7; RNF5 no se declara plenamente validado. |
+| Modularidad | PrincipalSensor/SensorUltrasonico adquieren; dominio.py clasifica; PrincipalActuador/ControladorLeds actúan; ClienteTcp transporta. | Responsabilidades delimitadas, sin clasificación duplicada en firmware. |
+| Orientación a objetos | Cabeceras SensorUltrasonico, ControladorLeds y ClienteTcp; clases ServidorTcp, ManejadorConexion, Cliente y EstadoSistema. | Pines, estados, buffers y sockets encapsulados; setup/loop se describen correctamente como funciones. |
+| Interfaces y dependencias | Biblioteca Compartido, firmas crearRegistro/crearLectura/leerComando, ReceptorLineas y llamadas de los principales; platformio.ini. | Interfaces coherentes; dos programas independientes reutilizan tipos y transporte; dominio Python independiente del hardware. |
+| Convenciones y documentación | Constantes con unidades, métodos C++ y nombres Python, comentarios de fase, desbordamiento, buffers y errores. | Código legible con decisiones técnicas explicadas; se retiró la instrumentación temporal del HC-SR04 y se conservan registros normales. |
+| Concurrencia y recuperación | Locks de Cliente/EstadoSistema, validación completa, limpieza de buffers, millis y reintentos de ClienteTcp. | Sincronización explícita. Los envíos bajo bloqueo global y el timeout por operación son limitaciones vigentes. |
+| Verificación y documentación | Seis suites nativas, tres archivos Python, README, diagramas, informe y evidencia física. | Compilaciones y ejecuciones previas documentadas; registro CTest local existente. Resultados de las ejecuciones previas identificados en §4.1.1. |
 
-**Acta de revisión integral de RNF5, versión y decisiones sobre hallazgos:** [PENDIENTE DE EVIDENCIA]
+La revisión respalda los criterios estructurales de RNF5 y registra las limitaciones como decisiones de implementación, no como correcciones realizadas. Los resultados de §4 complementan la inspección estructural y la evaluación de los criterios de calidad.
 
 ## 4. Pruebas y Validaciones
 
-El plan conserva los 16 casos PV y los cuatro ensayos PN de las [validaciones previstas del diseño](docs/diagramas/Diseno_del_sistema.md#7-trazabilidad-y-validaciones-previstas), relacionados con los requisitos en §2.7. Se distingue código de prueba disponible, ejecución reportada y evidencia verificable. Para la actualización de rangos y Lejos se ejecutaron las pruebas locales de §4.1.1; no se presentan resultados físicos obtenidos.
+La validación combina pruebas automatizadas del software y ensayos con los dos ESP32 reales. El [registro físico completo, de seis páginas](<docs/evidencias/Registro de Pruebas RF y RFN.pdf>) contiene fotografías con regla, capturas serie/TCP y resultados RF/RNF medidos o verificados por el equipo. El [video original de LEDs](docs/evidencias/leds.mp4) complementa la observación de la actuación. Estos datos pertenecen a P2; no se reutilizan resultados de P1.
 
-### 4.1 Datos de la sesión y procedimiento
+### 4.1 Evidencias, procedimiento e identificación de pruebas
 
-| Campo | Registro |
-|---|---|
-| Fecha, hora e integrantes responsables | [PENDIENTE DE EVIDENCIA] |
-| Versiones o identificadores de ambos firmwares y del servidor evaluados | [PENDIENTE DE EVIDENCIA] |
-| Montaje, alimentación, red, IP y puerto reales | [PENDIENTE DE EVIDENCIA] |
-| Instrumento de referencia y condiciones ambientales | [PENDIENTE DE EVIDENCIA] |
-| Método, repeticiones y resolución temporal de las mediciones | [PENDIENTE DE MEDICIÓN] |
+Las fotografías muestran una superficie plana colocada frente al HC-SR04 y una regla como referencia. Se registraron publicaciones del sensor a distancias reales de 3, 10, 20 y 35 cm y una serie de exactitud con tres lecturas en siete posiciones. Son ensayos distintos: no se presupone que la fotografía y cada fila numérica hayan sido tomadas en el mismo instante.
 
-#### 4.1.1 Pruebas automatizadas disponibles
+Las capturas de comunicación de la página 4 están fechadas el **17/11/2026**: muestran la PC en `172.20.10.2:5000`, el actuador en `172.20.10.3`, monitor del sensor en COM7 y del actuador en COM3, ambos a 115200 baudios. Son datos de esa sesión, no direcciones ni puertos serie universales. La revisión documental utiliza `3a25f24` como referencia del código; el PDF identifica la sesión física mediante sus capturas.
 
-El [resumen del equipo](docs/RESUMEN_PARA_INFORME.md) conserva el reporte histórico de 7/7 suites con 191 comprobaciones C++ y 26 métodos Python, sin registros confirmados en la auditoría previa. Tras incorporar Lejos y los nuevos límites, el 15/11/2026 se ejecutaron seis suites C++ con MSVC/CTest (230/230 comprobaciones) y, por separado, Python 3.12.6 (26/26 métodos). La tabla refleja el inventario vigente. **Los resultados locales no sustituyen los ensayos físicos**; la incorporación de salidas al índice de evidencias permanece pendiente.
+#### 4.1.1 Automatización y antecedentes de compilación
 
-| Suite o archivo | Comprobaciones / métodos | Entorno y alcance |
+La revisión previa del 15/11/2026 registró compilación satisfactoria de `sensor` y `actuador`, seis suites C++ con **230/230 comprobaciones** y **26/26 métodos Python** con Python 3.12.6, ejecutados por separado. El registro CTest original `LastTest.log`, disponible localmente en `.pio/build/pruebas_control/Testing/Temporary/`, contiene las seis suites aprobadas. No está versionado y no se añade una copia al repositorio. El resultado Python y las compilaciones también constan en el [resumen del equipo](docs/RESUMEN_PARA_INFORME.md#4-pruebas-automatizadas-para-4-separadas-de-las-físicas); el respaldo disponible de estas ejecuciones se distingue del registro CTest local. En esta finalización no se ejecutaron nuevamente pruebas ni compilaciones.
+
+| Suite | Cantidad | Alcance |
 |---|---:|---|
-| [protocolo_aplicacion](tests/native/protocolo_aplicacion.cpp) | 29 comprobaciones | C++ nativo: registro, publicación, normalización y comandos válidos/incorrectos. |
-| [receptor_lineas](tests/native/receptor_lineas.cpp) | 23 comprobaciones | C++ nativo: fragmentos, mensajes consecutivos, longitud, LF y caracteres rechazados. |
-| [cliente_tcp](tests/native/cliente_tcp.cpp) | 76 comprobaciones | Arduino/WiFi/socket simulados: registro, envíos parciales, plazos, reintentos y último `SET`. |
-| [controlador_leds](tests/native/controlador_leds.cpp) | 53 comprobaciones | GPIO y reloj simulados: modos, alternancia, conservación de fase, entrada y salida de Lejos sincronizado y apagado. |
-| [principal_sensor](tests/native/principal_sensor.cpp) | 19 comprobaciones | Principal real con fakes: eco, intervalo, publicación, envío pendiente y recuperación. |
-| [principal_actuador](tests/native/principal_actuador.cpp) | 30 comprobaciones | Principal real con fakes: registro, consumo, watchdog, error, apagado y reconexión. |
-| [test_protocolo.py](tests/python/test_protocolo.py) | 8 métodos | Pruebas lógicas Python de dominio, sintaxis, estados y reconstrucción de líneas. |
-| [test_servidor.py](tests/python/test_servidor.py) | 14 métodos | Servidor con sockets TCP locales: rangos, roles, fragmentos, silencio, errores y cierre. |
-| [test_simuladores.py](tests/python/test_simuladores.py) | 4 métodos | Clientes Python por sockets locales y análisis de registros controlados. |
-| Total vigente | 230 comprobaciones C++; 26 métodos Python | Ejecución local satisfactoria el 15/11/2026; evidencia archivada en el informe y validación física pendientes. |
+| [protocolo_aplicacion](tests/native/protocolo_aplicacion.cpp) | 29 | Registro, publicación, normalización, buffers y validación de SET. |
+| [receptor_lineas](tests/native/receptor_lineas.cpp) | 23 | Fragmentación, líneas consecutivas, LF, longitud y caracteres. |
+| [cliente_tcp](tests/native/cliente_tcp.cpp) | 76 | Registro, escritura parcial, errores, reintentos, último SET y temporizadores. |
+| [controlador_leds](tests/native/controlador_leds.cpp) | 53 | Modos, frecuencia con reloj simulado, fase, sincronización de Lejos y apagado. |
+| [principal_sensor](tests/native/principal_sensor.cpp) | 19 | GPIO23/18, conversión de eco, cadencia, invalidez, descarte y recuperación. |
+| [principal_actuador](tests/native/principal_actuador.cpp) | 30 | Registro, consumo, watchdog, reconexión, apagado y Lejos. |
+| [test_protocolo.py](tests/python/test_protocolo.py) | 8 métodos | Dominio, límites y sintaxis Python. |
+| [test_servidor.py](tests/python/test_servidor.py) | 14 métodos | Sockets TCP locales: roles, límites, mensajes, plazos, fragmentación y cierres. |
+| [test_simuladores.py](tests/python/test_simuladores.py) | 4 métodos | Clientes de consola, flujo local y análisis de registros. |
 
-Las suites nativas enlazan el firmware con [fakes de Arduino, WiFi y sockets](tests/native/fakes/); no demuestran asociación WiFi real ni niveles eléctricos medidos. Las suites Python usan `unittest`; dominio y protocolo no requieren red, mientras que servidor y simuladores comprueban intercambio TCP por loopback. Este recorrido Python no equivale a haber ensayado conjuntamente los dos ESP32 físicos. Los comandos generales de reproducción están en [README — Pruebas](README.md#pruebas). En esta actualización se ejecutaron CTest nativo con configuración Debug y `python -B -m unittest discover -s tests/python -v` con Python 3.12.6; CTest no incluyó Python automáticamente porque su configuración solicita 3.13.
+Las suites C++ usan [fakes de Arduino, reloj, WiFi y sockets](tests/native/fakes/). Las pruebas Python del servidor usan TCP real sobre loopback, sin placas. Ninguna de estas modalidades mide por sí sola exactitud ultrasónica, frecuencia eléctrica o respuesta visible del prototipo. El reporte histórico de 191 comprobaciones corresponde a la versión anterior a Lejos y no se suma al inventario vigente.
 
-#### 4.1.2 Herramientas y registro reproducible
+#### 4.1.2 Correspondencia PF, PV y PN
 
-[simular_sensor.py](tools/simular_sensor.py) se registra como sensor y publica entradas controladas para evaluar servidor y actuador; [simular_actuador.py](tools/simular_actuador.py) se registra como actuador y recibe comandos. Permiten aislar roles y probar una placa frente al otro objeto simulado; sus resultados no miden exactitud ultrasónica, frecuencia visible ni respuesta física completa.
+Se conservan **PV-01 a PV-16** como casos de verificación y **PN-01 a PN-04** como ensayos cuantitativos. Los códigos PF-01–PF-12 de la siguiente tabla organizan editorialmente los bloques del expediente físico; no representan doce ejecuciones adicionales. El PDF no imprime esa numeración. PF-04/PF-05 identifican aquí la actuación y el video indicados por el equipo.
 
-[analizar_registro.py](tools/analizar_registro.py) resume `POST`, inválidos, `SET`, registros, errores y cierres, así como la duración entre la primera y última llegada y el mayor intervalo. Estima cadencia de recepción mediante `(N−1)/(t_último−t_primero)` cuando hay suficientes datos y duración positiva. Esto difiere de contar adquisiciones en una ventana externa mediante `N/T`; los registros del servidor tampoco demuestran por sí solos ausencia de reinicios en ambas placas.
+| Bloque del expediente | Contenido real | Casos/requisitos relacionados | Fuente |
+|---|---|---|---|
+| PF-01 | Fotografías con regla a 5, 10, 15 y 25 cm. | RF1; PN-02 como procedimiento de referencia. | PDF, pp. 1–2. |
+| PF-02 | Lecturas serie para referencias de 3, 10, 20 y 35 cm. | RF1; PV-01–PV-03. | PDF, pp. 2–3. |
+| PF-03 | Correspondencia entre distancia publicada y rango del servidor. | RF2; PV-01–PV-03. | Capturas y código de dominio. |
+| PF-04 | Actuación de LEDs en el montaje. | RF3; PV-01–PV-04. | Fotografías, video y observación del equipo. |
+| PF-05 | Parpadeo observado y rojo visualmente más rápido, declarado por el equipo. | RF3; PV-05. | Video; temporización nominal en C++. |
+| PF-06 | Lectura inválida y LEDs apagados. | RF1, RF3; PV-04. | PDF, p. 3. |
+| PF-07 | Sensor, servidor y registro del actuador. | RF4; PV-06. | PDF, p. 4. |
+| PF-08 | Rechazo role_busy, reintento y OK posterior. | RF4; PV-07/PV-15. | PDF, p. 4. |
+| PF-09 | Sesión de estabilidad de 24 minutos. | RNF1; PN-01. | PDF, p. 5. |
+| PF-10 | Exactitud: siete posiciones, tres lecturas por posición. | RNF2; PN-02. | PDF, p. 5. |
+| PF-11 | Cinco tiempos de respuesta. | RNF3; PN-03. | PDF, pp. 5–6. |
+| PF-12 | Conteo de 39 lecturas en 10 s. | RNF4; PN-04. | PDF, p. 6. |
 
-Para cada futura ejecución automatizada se debe conservar salida completa, herramienta/versión, fecha, identificador del código, casos ejecutados y omitidos y estado final. El resumen cita un registro de CTest no versionado; su incorporación al informe o a §8.2 permanece [PENDIENTE DE EVIDENCIA]. Los resultados reportados no se transcriben como aprobados sin ese respaldo.
+La [guía de pruebas físicas](docs/PRUEBAS_FISICAS.md) tiene una numeración local previa: su PF-01 corresponde a rangos, PF-02 a invalidez, PF-03 a parpadeo y PF-04 a desconexión. En este informe se califica expresamente «PF del expediente» cuando se usa la nueva tabla; PV y PN mantienen la trazabilidad común.
 
-La [guía de pruebas físicas](docs/PRUEBAS_FISICAS.md) establece preparación, superficie de referencia, grabación y registros por sesión. Las tablas siguientes se completarán con datos de los ESP32 reales, separando cada ensayo de las simulaciones.
+### 4.2 Validación funcional
 
-### 4.2 Casos de prueba funcionales
+#### 4.2.1 Medición y clasificación: RF1 y RF2
 
-Para los límites exactos, distinguir pruebas con entradas controladas al servidor de pruebas físicas sujetas al error del sensor. Registrar el método empleado y verificar además el recorrido integrado sensor → servidor → actuador.
+La regla se empleó como referencia física y el monitor serie registró el valor publicado. La página 2 conserva seis líneas de `2.97` cm para 3 cm reales; la página 3 muestra `9.88` cm para 10 cm, `19.89` cm para 20 cm y dos líneas de `35.16` seguidas de tres de `35.14` cm para 35 cm.
 
-| ID | Requisitos | Entrada o situación prevista | Resultado esperado según el diseño | Resultado y evaluación | Evidencia |
-|---|---|---|---|---|---|
-| PV-01 | RF2, RF3 | 3 y 5 cm. | Solo rojo a 4 Hz. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
-| PV-02 | RF2, RF3 | 5.01 y 15 cm. | Solo amarillo a 2 Hz. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
-| PV-03 | RF2, RF3 | 15.01 y 25 cm; 25.01, 50 y 100 cm. | Verde a 2 Hz hasta 25 cm; Lejos con los tres simultáneos a 2 Hz por encima. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
-| PV-04 | RF1, RF3, RF4 | Timeout de ECHO o lectura inválida. | `POST distance=invalid`; `SET` con todos apagados. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
-| PV-05 | RF3, RF4 | Comandos idénticos cada 250 ms, incluida la entrada en Lejos desde cada rango. | Conservar fase; ciclos de 500 o 250 ms; los tres sincronizados en Lejos. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
-| PV-06 | RF4 | Registrar primero sensor y luego actuador; repetir en orden inverso. | Ambos órdenes funcionan; estado reciente o apagado inicial. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
-| PV-07 | RF4 | Solicitar un rol ocupado desde un cliente nuevo. | `ERROR reason=role_busy`; conservar al cliente original. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
-| PV-08 | RF4 | Fragmentar un `POST` o `SET` en TCP. | Procesarlo una sola vez tras recibir LF. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
-| PV-09 | RF4 | Agrupar mensajes en una lectura TCP. | Reconstruirlos en orden y conservar el fragmento final; el actuador consume solo el último `SET` completo pendiente, sin garantizar todos los estados intermedios. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
-| PV-10 | RF4 | Líneas de 127 y 128 bytes de contenido antes de LF. | 127 cumple longitud, sujeto a sintaxis; 128 se rechaza. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
-| PV-11 | RF3, RF4 | Comando desconocido, argumentos incompletos, coma decimal, cero o rol incompatible. | Rechazo sin actuación parcial; cierre y apagado según corresponda. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
-| PV-12 | RF4 | Socket abierto sin completar registro en 2000 ms. | Cierre por plazo de registro y posterior reintento, según el criterio original. | Plazo local ESP32 implementado; el timeout por operación de la PC difiere ante fragmentos prolongados. [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
-| PV-13 | RF3, RF4 | Sensor deja de enviar; servidor activo. | Tras 2000 ms: invalidar datos, apagar LEDs y liberar sensor, según el criterio original. | La PC termina la atención por timeout de recepción sin datos; no aplica el plazo estricto desde el último `POST` completo si llegan fragmentos. [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
-| PV-14 | RF3, RF4 | Actuador no recibe comandos; desconexión aún no detectada. | Apagado local tras 2000 ms sin `SET`. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
-| PV-15 | RF3, RF4 | Desconexión detectada y recuperación. | Apagado, reintento TCP tras 2000 ms; WiFi tras 2000 ms de la pérdida y luego cada 10000 ms; nuevo registro y restauración válida. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
-| PV-16 | RF3, RF4 | Actuador se conecta con lectura reciente, inválida, antigua o inexistente. | Último estado reciente o todos apagados, según el protocolo. | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
+| Referencia real | Valores visibles del POST (cm) | Error absoluto de esas lecturas | Clasificación por el código |
+|---:|---|---|---|
+| 3 cm | 2.97 | 0.03 cm | Rojo. |
+| 10 cm | 9.88 | 0.12 cm | Amarillo. |
+| 20 cm | 19.89 | 0.11 cm | Verde. |
+| 35 cm | 35.16; 35.14 | 0.16; 0.14 cm | Lejos. |
 
-La matriz de §2.7 identifica las suites relacionadas con cada caso. Los resultados esperados de la tabla se conservan como criterios, no como comportamientos íntegramente demostrados. Deben anotarse estas diferencias al ejecutar y evaluar:
+[Referencia física de 5 cm, PDF, p. 1](<docs/evidencias/Registro de Pruebas RF y RFN.pdf#page=1>)
 
-- PV-09: se reconstruyen líneas en orden, pero el actuador conserva solo el último `SET` completo pendiente; verificar recepción y consumo por separado.
-- PV-12/PV-13: las pruebas disponibles de silencio no cubren el plazo original ante fragmentos prolongados; el timeout del servidor es por operación.
-- PV-14: el plazo se renueva al consumir un comando válido, no al recibir cualquier fragmento.
-- PV-15: los 2000 ms corresponden al reintento TCP; WiFi espera 2000 ms tras pérdida y luego 10000 ms entre intentos. Conservar esta distinción al evaluar recuperación.
-- PV-16: documentar las cuatro variantes de lectura, sin inferir cobertura aprobada de su mera presencia en el plan.
+[Captura original para referencia de 3 cm, PDF p. 2](<docs/evidencias/Registro de Pruebas RF y RFN.pdf#page=2>)
 
-### 4.3 PN-01 — Estabilidad del sistema completo
+La clasificación se aplica a la **distancia recibida**, no a la marca nominal de la regla. Por ejemplo, una lectura de 5.60 cm en la tabla de exactitud pertenece a amarillo aunque la referencia física sea 5 cm; 15.20 corresponde a verde y 25.90 a Lejos. Esto es compatible con el error de medición y no representa un cambio de umbrales. Las fotografías en los límites no certifican por sí solas una entrada numérica exacta de 5.00, 15.00 o 25.00 cm. Esas fronteras y los valores inmediatamente superiores se comprueban con entradas controladas en las suites Python.
 
-**Criterio:** RNF1, ≥ 10 minutos sin reinicios ni bloqueos. Conservar eventos de los tres equipos y verificar continuidad de lecturas y actuación.
+#### 4.2.2 Actuación, parpadeo e invalidez: RF3
 
-| Inicio | Fin | Duración | Reinicios por equipo | Bloqueos | Continuidad y fallos | Evaluación | Evidencia |
-|---|---|---|---|---|---|---|---|
-| [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
+El equipo verificó visualmente los estados de los LEDs según los rangos y observó un parpadeo del rojo más rápido que el de los demás, con el objeto colocado aproximadamente a 5 cm. El [video PF-04/PF-05 del expediente](docs/evidencias/leds.mp4), de aproximadamente 7.87 s, complementa esta observación del funcionamiento físico.
 
-Se propone una sesión de al menos 12 minutos para superar el mínimo de 10, según la guía. Registrar inicio y fin externos, eventos serie de ambas placas, log del servidor y continuidad visible de actuación. Los conteos de registros, errores y separación de `POST` ayudan a detectar interrupciones, pero no sustituyen la observación de reinicios y bloqueos de los tres equipos. Cualquier interrupción debe quedar registrada y evaluarse, sin ocultarla con un promedio.
+Las frecuencias **4 Hz y 2 Hz son valores nominales configurados en el firmware**, respaldados por pruebas con reloj simulado. El video se utiliza como evidencia visual del parpadeo, no como una medición instrumental exacta de frecuencia o desfase. La fotografía [del actuador](docs/evidencias/actuador.jpeg) documenta los tres LEDs encendidos; el controlador sincroniza el comienzo de Lejos y conserva la fase ante SET repetidos.
 
-### 4.4 PN-02 — Exactitud de medición
+La página 3 asocia publicaciones `POST distance=invalid` con la fotografía de los tres LEDs apagados. Se verifica así que una lectura no utilizable no mantiene una orden de cercanía anterior ni se interpreta como distancia válida.
 
-**Criterio:** RNF2, error absoluto máximo ≤ 3 cm en el intervalo previsto de 3 a 150 cm. Agregar filas para referencias que cubran los cuatro rangos. Calcular `error absoluto = |lectura − referencia|` y conservar las lecturas individuales.
+[Registro original de lecturas inválidas, PDF p. 3](<docs/evidencias/Registro de Pruebas RF y RFN.pdf#page=3>)
 
-| Referencia física (cm) | Lecturas (cm) y cantidad | Mínimo / máximo / promedio (cm) | Error absoluto máximo (cm) | Evaluación | Evidencia |
-|---|---|---|---|---|---|
-| [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
+La [fotografía de apagado del mismo bloque](<docs/evidencias/Registro de Pruebas RF y RFN.pdf#page=3>) complementa el registro. El apagado proporciona una señalización consistente ante lecturas inválidas.
 
-El procedimiento incluye **3 cm** junto con las referencias de 5, 20, 45, 75, 100, 125 y 150 cm previstas en la guía. Tomar al menos tres lecturas individuales por posición, anotar condiciones y registrar inválidas por separado. La aceptación se basa en el máximo de los errores absolutos individuales, no en el promedio. La cobertura se limita a las distancias realmente ensayadas; la conversión simulada no demuestra exactitud del sensor.
+#### 4.2.3 Recorrido TCP y recuperación: RF4
 
-**Cobertura real del intervalo y análisis de errores:** [PENDIENTE DE MEDICIÓN]
+En la página 4, el monitor del sensor publica repetidamente `29.93` cm y también `28.57` cm. La captura del servidor registra esos POST y los SET con `redLed=blink_2 yellowLed=blink_2 greenLed=blink_2`, correctos porque ambas distancias superan 25 cm. La consola del actuador muestra asociación WiFi, dirección local `172.20.10.3`, conexión a `172.20.10.2:5000` y registro aceptado.
 
-### 4.5 PN-03 — Tiempo de respuesta extremo a extremo
+[POST y SET registrados por el servidor, PDF p. 4](<docs/evidencias/Registro de Pruebas RF y RFN.pdf#page=4>)
 
-**Criterio:** RNF3, ≤ 1 s desde el cambio físico de distancia hasta el cambio visible del actuador. Registrar ambos eventos con una referencia temporal común; los relojes locales no sincronizados no permiten restar timestamps de equipos distintos directamente.
+La [captura del actuador](<docs/evidencias/Registro de Pruebas RF y RFN.pdf#page=4>) acredita conexión y aceptación del rol. No contiene una confirmación individual por SET: ese acuse no existe en el protocolo. La actuación se respalda con la evidencia visual, sin atribuir a las consolas una medición sincronizada del recorrido completo.
 
-| Ensayo y transición de rango | Método y resolución temporal | Instante del cambio físico | Instante de actuación | Tiempo extremo a extremo | Evaluación | Evidencia |
-|---|---|---|---|---|---|---|
-| [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
+En el ensayo separado de desconexión/reconexión se observa primero `ERROR reason=role_busy`, después el mensaje de reintento en 2000 ms y finalmente `Registro aceptado (OK)`. El rol todavía estaba ocupado en el servidor; la captura no determina por qué ni permite asignar una duración exacta a su liberación. El cliente cierra la sesión rechazada, limpia buffers y reintenta según su temporizador. El resultado final es la recuperación del registro, **con rechazo intermedio**, no una reconexión inmediata perfecta.
 
-La guía armonizada identifica el **cambio físico de distancia/rango** que inicia la respuesta, sin esperar a que termine el movimiento del objeto. Grabar objeto y LEDs en el mismo cuadro, anotar la referencia inicial y final y la tasa real de cuadros. Calcular la diferencia de cuadros dividida por fps, informar la resolución y repetir transiciones de los cuatro rangos. El máximo observado se compara con 1 s; no se sustituye por la suma de intervalos nominales ni por timestamps de recepción del servidor.
+[Rechazo temporal y registro posterior, PDF p. 4](<docs/evidencias/Registro de Pruebas RF y RFN.pdf#page=4>)
 
-**Repeticiones, máximo observado y análisis de demoras:** [PENDIENTE DE MEDICIÓN]
+#### 4.2.4 Estado consolidado de PV-01 a PV-16
 
-### 4.6 PN-04 — Frecuencia de muestreo
+| Caso | Criterio conservado | Resultado y alcance de la evidencia |
+|---|---|---|
+| PV-01 | 3 y 5 cm: rojo a 4 Hz nominales. | Física: 3 cm → 2.97, fotografía de referencia a 5 cm y observación del equipo. Entrada exacta de 5 cm: prueba Python. El alcance de la observación del parpadeo se explica en §4.2.2. |
+| PV-02 | 5.01 y 15 cm: amarillo a 2 Hz. | Física: 10 cm → 9.88 y fotografía a 15 cm. Los dos límites numéricos se verifican en Python; la fotografía no fija el POST exacto. |
+| PV-03 | 15.01/25 cm: verde; 25.01/50/100 cm: Lejos a 2 Hz. | Física: 20 cm → 19.89, 35 cm → 35.14–35.16 y SET Lejos para 28.57/29.93. Límites exactos y 50/100: automatización. |
+| PV-04 | Invalidez: POST invalid y todos apagados. | PDF p. 3, observación física y pruebas de codificación/servidor/principales. |
+| PV-05 | Conservar fase con SET idénticos; entrada sincronizada en Lejos. | Controlador y principal actuador con reloj/GPIO simulados; observación visual complementaria del parpadeo (§4.2.2). |
+| PV-06 | Registro en ambos órdenes; estado reciente o apagado. | Registro físico documentado; los escenarios de servidor/simuladores verifican los órdenes de conexión. |
+| PV-07 | Rechazar rol ocupado sin desplazar al existente. | role_busy físico seguido de OK; conservación del cliente original cubierta en test_servidor. |
+| PV-08 | Fragmentación: actuar solo tras LF. | Verificación automatizada en receptor_lineas, cliente_tcp, principales y pruebas TCP locales. |
+| PV-09 | Reconstruir líneas agrupadas y conservar fragmento final. | Suites C++/Python. El actuador consume solo el último SET completo pendiente; no promete aplicar todos los estados intermedios. |
+| PV-10 | 127 bytes admitidos por longitud; 128 rechazados. | Pruebas de receptores y protocolo. La sintaxis sigue siendo obligatoria para una línea de 127 bytes. |
+| PV-11 | Rechazar sintaxis, argumentos o rol incompatibles sin actuación parcial. | Verificación automatizada de entradas erróneas en las suites de protocolo, cliente y servidor. |
+| PV-12 | Cerrar registro incompleto tras 2000 ms según el objetivo original. | ESP32 y silencio del servidor cubiertos por pruebas. La PC usa timeout por operación; fragmentos prolongados quedan fuera del plazo estricto original. |
+| PV-13 | Ausencia del sensor: apagar y liberar tras 2000 ms. | Prueba TCP local de silencio. La PC puede prolongar la espera si recibe fragmentos; el PDF de recuperación no mide este plazo. |
+| PV-14 | Actuador sin SET válido: apagar tras 2000 ms. | Verificación temporal en principal_actuador con reloj simulado, incluidos Lejos y conexión conservada. |
+| PV-15 | Desconexión, apagado, reintento y nuevo registro. | PDF p. 4 verifica recuperación del registro con role_busy intermedio; suites cubren apagado/reintentos. La evidencia física corresponde a la recuperación del registro; los escenarios de fallo se complementan con las suites. |
+| PV-16 | Actuador nuevo: último estado reciente o apagado si no es utilizable. | Pruebas de lectura reciente/reconexión y código de registro. El PDF no documenta separadamente las cuatro variantes reciente, inválida, antigua e inexistente. |
 
-**Criterio:** RNF4, ≥ 2 lecturas/s. El intervalo implementado de 250 ms equivale nominalmente a 4 lecturas/s, pero no constituye una medición. Contar por separado las lecturas obtenidas y los `POST` recibidos, indicando lecturas inválidas. Calcular `frecuencia = cantidad / duración en segundos`.
+### 4.3 PN-01 — Estabilidad (RNF1)
 
-| Ventana de observación | Duración (s) | Lecturas obtenidas / inválidas | POST recibidos | Frecuencia sensor (lecturas/s) | Frecuencia recepción (POST/s) | Evaluación | Evidencia |
-|---|---|---|---|---|---|---|---|
-| [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
+La página 5 registra una sesión física continua, independiente de las desconexiones provocadas para PV-15.
 
-Utilizar una ventana externa de duración conocida, por ejemplo al menos 60 s, e identificar cada adquisición mediante un método de conteo verificable. El monitor de publicaciones y el analizador de `POST` no certifican necesariamente todas las adquisiciones. Mantener separadas adquisición válida/inválida y recepción TCP; indicar pérdidas, envíos pendientes y reconexiones. La estimación entre primera y última llegada del analizador es información complementaria, no reemplaza la frecuencia del sensor exigida por RNF4. Método y registro del conteo de adquisiciones: [PENDIENTE DE EVIDENCIA].
+| Indicador | Resultado registrado | Criterio/evaluación |
+|---|---|---|
+| Duración | 24 minutos | Supera el mínimo de 10 minutos. |
+| Reinicios de ESP32 | 0 | Sin reinicios registrados. |
+| Desconexiones TCP | 0 | Sin interrupciones TCP registradas durante esta sesión. |
+| Bloqueos | 0 | Sin bloqueos registrados. |
+| Funcionamiento al finalizar | Correcto | Operación conservada. |
+| Evaluación del equipo | Cumple | RNF1 satisfecho en la sesión observada. |
 
-### 4.7 Incidencias y control de evidencias
+Durante los 24 minutos de la sesión registrada se mantuvo el funcionamiento correcto, con cero reinicios, cero bloqueos y cero desconexiones TCP. El resultado cumple el mínimo de 10 minutos de RNF1. Las desconexiones deliberadas de PV-15 pertenecen a un ensayo separado.
 
-| Caso o requisito | Incidencia observada | Causa y acción correctiva | Repetición y resultado | Evidencia |
-|---|---|---|---|---|
-| [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE IMPLEMENTACIÓN] | [PENDIENTE DE MEDICIÓN] | [PENDIENTE DE EVIDENCIA] |
+### 4.4 PN-02 — Exactitud (RNF2)
 
-Relacionar cada registro con el índice de §8.2 y el caso/requisito correspondiente, indicando versión, fecha, origen simulado/local/físico y método. Separar incidencias de implementación de fallos del montaje o de la red; conservar el ensayo original y la repetición después de una corrección. Las fotografías estáticas documentarán el montaje y los estados visibles; la frecuencia de parpadeo y las mediciones temporales requieren registros adecuados.
+Se conservan las tres lecturas y las columnas originales del PDF, p. 5. Se añade el máximo error individual porque el criterio de §1 es **error absoluto máximo ≤ 3 cm**, no solamente error del promedio.
+
+| Distancia real (cm) | Lectura 1 | Lectura 2 | Lectura 3 | Promedio (cm) | Error absoluto medio (cm), PDF | Máximo error individual (cm), recalculado |
+|---:|---:|---:|---:|---:|---:|---:|
+| 5 | 5.60 | 5.30 | 5.50 | 5.47 | 0.47 | 0.60 |
+| 10 | 10.80 | 10.60 | 10.90 | 10.77 | 0.77 | 0.90 |
+| 15 | 15.20 | 15.50 | 15.30 | 15.33 | 0.33 | 0.50 |
+| 20 | 20.70 | 20.90 | 20.50 | 20.70 | 0.70 | 0.90 |
+| 25 | 25.90 | 25.70 | 25.80 | 25.80 | 0.80 | 0.90 |
+| 30 | 30.40 | 30.20 | 30.50 | 30.37 | 0.37 | 0.50 |
+| 40 | 39.20 | 39.50 | 39.10 | 39.27 | 0.73 | 0.90 |
+
+Para cada posición, `promedio = (L1 + L2 + L3) / 3`, `error individual = |Li − referencia|` y `error absoluto medio = (|L1 − referencia| + |L2 − referencia| + |L3 − referencia|) / 3`. Todos los promedios y errores publicados son aritméticamente correctos al redondear a dos decimales. En cada fila las tres lecturas quedan del mismo lado de la referencia; por ello el error absoluto medio coincide aquí con `|promedio − referencia|`, aunque en general esas dos métricas no son equivalentes.
+
+El mayor error de las **21 lecturas es 0.90 cm**, inferior a 3 cm. Se cumple la tolerancia en las siete posiciones ensayadas de **5–40 cm**. Las capturas adicionales de 3 cm muestran 2.97 cm, pero no constituyen la serie de tres repeticiones de PN-02. El objetivo original de validar 3–150 cm se conserva: la evidencia no permite extender el cumplimiento a todo ese intervalo, en especial por encima de 40 cm.
+
+### 4.5 PN-03 — Tiempo de respuesta (RNF3)
+
+| Intento | Tiempo registrado | Criterio máximo | Evaluación |
+|---:|---:|---:|---|
+| 1 | 0.42 s | 1 s | Cumple. |
+| 2 | 0.57 s | 1 s | Cumple. |
+| 3 | 0.48 s | 1 s | Cumple. |
+| 4 | 0.62 s | 1 s | Cumple. |
+| 5 | 0.54 s | 1 s | Cumple. |
+| Promedio | 0.526 s | Referencia descriptiva | Promedio verificado. |
+
+La suma de los cinco tiempos es 2.63 s y `2.63 / 5 = 0.526 s`. Se registró un promedio de **0.526 s** y un máximo de **0.62 s**; los cinco ensayos se encuentran dentro del límite de aceptación de 1 s. Los resultados físicos constan en las páginas 5–6 del PDF.
+
+### 4.6 PN-04 — Frecuencia de muestreo (RNF4)
+
+| Indicador | Resultado registrado |
+|---|---:|
+| Duración observada | 10 s |
+| Lecturas registradas | 39 |
+| Frecuencia calculada | 3.9 lecturas/s |
+| Mínimo requerido | 2 lecturas/s |
+| Evaluación del equipo | Cumple |
+
+`39 / 10 = 3.9 lecturas/s`, superior al mínimo de 2 lecturas/s. El intervalo configurado de 250 ms corresponde a **4 lecturas/s nominales**, mientras que **3.9 lecturas/s** es la frecuencia observada en la ventana física de 10 s. El indicador corresponde al conteo de lecturas del registro; no se utiliza para inferir contadores independientes de adquisiciones, lecturas inválidas o recepciones TCP.
+
+### 4.7 Incidencias y límites de interpretación
+
+| Hallazgo | Evidencia y resultado | Interpretación técnica |
+|---|---|---|
+| role_busy durante recuperación | PDF p. 4: rechazo, reintento y OK. | Incidencia del ensayo recuperada mediante reintento automático y aceptación posterior del registro. |
+| `esp_core_dump_flash: Core dump flash config is corrupted` | Captura de arranque del actuador, seguida de WiFi y registro aceptado. | Advertencia histórica en la captura de arranque, seguida de conexión y registro correctos. Su causa no queda identificada; se mantiene separada de los eventos de la sesión de estabilidad. |
+| Referencia física cerca de umbrales | Serie de exactitud: 5.60/15.20/25.90 cm frente a referencias 5/15/25. | El servidor clasifica el POST; error del sensor y cambio de rango deben analizarse por separado. |
+| Cobertura de exactitud | Tres lecturas por referencia entre 5 y 40 cm. | Satisface la tolerancia en lo ensayado; no acredita 3–150 cm completo. |
+| Plazos y concurrencia del servidor | Código con timeout por operación y sendall bajo bloqueo de estado. | Limitaciones no corregidas mediante documentación. La estabilidad y los tiempos medidos no prueban el comportamiento ante todos los clientes lentos o fragmentos prolongados. |
+| Registro de respuesta y frecuencia | RNF3: cinco tiempos de 0.42–0.62 s, promedio 0.526 s; RNF4: 39 lecturas en 10 s. | Resultados físicos dentro de los criterios de aceptación; la respuesta se evalúa por ensayo y la frecuencia por el conteo observado. |
 
 ## 5. Resultados
 
-Los resultados documentales se clasifican por su respaldo: implementación observable en el código, pruebas disponibles, ejecución reportada y mediciones físicas. La existencia de una funcionalidad o de un caso automatizado no demuestra por sí sola el cumplimiento con las placas reales. Las referencias de §3 y §4 permiten identificar el alcance sin atribuir resultados experimentales inexistentes.
+### 5.1 Cumplimiento y cobertura
 
-### 5.1 Cumplimiento de requisitos
-
-Se dispone de programas independientes de sensor y actuador, un cliente WiFi/TCP común, el servidor Python y el protocolo de aplicación. La adquisición y publicación pertenecen al sensor; la clasificación y generación de comandos, a la PC; la ejecución de los modos y su temporización, al actuador. La siguiente tabla resume esos avances y conserva pendiente la aceptación integral.
-
-| Requisito | Criterio de referencia | Resultado documentado | Cumplimiento | Evidencia |
-|---|---|---|---|---|
-| RF1 | Medición ultrasónica y tratamiento de invalidez. | Adquisición y publicación implementadas en `SensorUltrasonico` y `PrincipalSensor`; timeout de eco e invalidez codificados. | Validación física pendiente. | Código y fragmentos de §3.2; [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA]. |
-| RF2 | Cuatro rangos y límites de 5, 15 y 25 cm. | Clasificación centralizada en `ControlDistancia` Python; casos automatizados disponibles para los límites. | Ejecución verificable y recorrido físico pendientes. | §3.3 y §4.2; [PENDIENTE DE EVIDENCIA]. |
-| RF3 | Modos de LEDs y apagado según §1.2. | `ControladorLeds` ejecuta comandos, conserva fase y permite apagado; el principal incorpora watchdog. | Actuación y frecuencias físicas pendientes. | §3.2; [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA]. |
-| RF4 | Comunicación TCP/WiFi y protocolo. | Clientes ESP32, servidor y protocolo implementados; reconstrucción de líneas, registro y reconexión disponibles. | Funcionamiento integrado confirmado por el equipo, evidencia pendiente; diferencias de plazos por resolver. | §2.5, §2.6 y §4.2; [PENDIENTE DE EVIDENCIA]. |
-| RNF1 | ≥ 10 minutos sin reinicios ni bloqueos. | Existen mecanismos de recuperación y escenarios automatizados acotados; no hay duración física confirmada. | Pendiente de PN-01. | [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA]. |
-| RNF2 | Error máximo ≤ 3 cm en 3 a 150 cm. | Conversión de eco y representación decimal implementadas; no hay errores físicos medidos confirmados. | Pendiente de PN-02. | [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA]. |
-| RNF3 | Respuesta extremo a extremo ≤ 1 s. | Temporizadores y recorrido de comunicación implementados; no hay tiempos físicos confirmados. | Pendiente de PN-03. | [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA]. |
-| RNF4 | ≥ 2 lecturas/s. | Intervalo nominal de 250 ms condicionado al registro y disponibilidad de envío; no acredita cadencia medida. | Pendiente de PN-04. | [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA]. |
-| RNF5 | Calidad del código según §3.4. | Separación de módulos, objetos, interfaces y responsabilidades documentada; limitaciones identificadas. | Revisión integral pendiente, sin aprobación global. | Inspección parcial de §3.4; [PENDIENTE DE EVIDENCIA]. |
-
-El inventario de pruebas y el estado de la ejecución se distinguen de la evaluación de requisitos:
-
-| Categoría | Información disponible | Alcance del resultado |
+| Requisito | Resultado respaldado | Evaluación y alcance |
 |---|---|---|
-| Pruebas C++ | Seis suites con 230 comprobaciones, detalladas en §4.1.1. | Código de pruebas disponible; hardware, reloj y red simulados. No acredita montaje real. |
-| Pruebas Python | 26 métodos sobre dominio, protocolo, servidor, simuladores y analizador. | Pruebas lógicas y escenarios con sockets locales; no equivalen a WiFi con ambos ESP32. |
-| Ejecución automatizada | Actualización del 15/11/2026: seis suites C++ (230/230) y ejecución Python separada (26/26), con nuevos límites y Lejos. | Resultados observados en PC, distintos del reporte histórico; incorporación de salidas al informe: [PENDIENTE DE EVIDENCIA]. Sin validación física. |
-| Validación física | PN-01 a PN-04 y casos funcionales previstos en §4. | Estabilidad, exactitud, respuesta y adquisición: [PENDIENTE DE MEDICIÓN]. Montaje e intercambio: [PENDIENTE DE EVIDENCIA]. |
+| RF1 | Lecturas 2.97, 9.88, 19.89 y 35.14–35.16 cm; referencia con regla; invalidez identificada. | Función de adquisición y publicación verificada físicamente. Exactitud detallada en PN-02. |
+| RF2 | Cuatro rangos en código; muestras físicas interiores y SET Lejos correctos. | Clasificación verificada; fronteras exactas respaldadas por pruebas automatizadas. |
+| RF3 | Actuación y apagado observados, fotografía y video; parpadeo nominal y fase probados con reloj simulado. | Actuación funcional respaldada; frecuencias nominales y evidencia visual diferenciadas en §4.2.2. |
+| RF4 | POST en sensor/servidor, SET generado, actuador registrado; recuperación tras role_busy. | Recorrido TCP/WiFi operativo y recuperación del registro evidenciados. Sin acuse por cada SET. |
+| RNF1 | 24 min, 0 reinicios, 0 desconexiones TCP y 0 bloqueos. | Cumple el mínimo de 10 min en la sesión registrada. |
+| RNF2 | Máximo individual 0.90 cm en 21 lecturas. | Cumple ≤ 3 cm en 5–40 cm ensayados; cobertura parcial del objetivo 3–150 cm. |
+| RNF3 | Cinco resultados 0.42–0.62 s; promedio 0.526 s. | Los cinco ensayos cumplen el límite de aceptación de 1 s. |
+| RNF4 | 39 lecturas/10 s = 3.9 lecturas/s. | Supera el mínimo de 2 lecturas/s en la ventana observada (§4.6). |
+| RNF5 | Revisión de módulos/interfaces en §3.4, documentación, compilaciones y automatización existentes. | Criterios estructurales respaldados; limitaciones de concurrencia y supervisión expresamente documentadas. |
 
-No se declara ningún RF ni RNF plenamente validado. Los resultados físicos se incorporarán en las tablas de §4 y se compararán aquí con los criterios originales, indicando versión evaluada, método, cobertura y evidencias.
+### 5.2 Análisis de los resultados
 
-### 5.2 Análisis crítico y limitaciones
+La implementación distribuye la adquisición y la actuación entre placas independientes y conserva la decisión en Python. Las capturas del servidor vinculan valores publicados con el comando de Lejos, mientras la evidencia visual documenta el montaje y la actuación. La recuperación observada demuestra la utilidad de los reintentos: después del rechazo temporal role_busy, el actuador obtuvo el registro aceptado.
 
-El avance principal es la materialización en código de la arquitectura distribuida: se sustituyó la actuación local de P1 por dos programas ESP32 y control central en Python. La biblioteca C++ común facilita reutilizar tipos y codificación sin duplicar la clasificación. Este resultado es estructural; su comportamiento con ambas placas aún requiere observación.
+El error máximo individual de 0.90 cm ofrece una evaluación más exigente que comparar únicamente promedios. Aun con error menor de 3 cm, una lectura próxima a 5, 15 o 25 cm puede cruzar un umbral; por ello, la clasificación debe evaluarse sobre el valor recibido y las fronteras lógicas se prueban con entradas controladas. No se añadió histéresis ni filtrado al prototipo.
 
-| Aspecto identificado | Implicación para interpretar los resultados | Validación o decisión pendiente |
-|---|---|---|
-| Timeout del servidor por operación | Los fragmentos pueden iniciar nuevas esperas, sin aplicar el plazo original desde el último mensaje completo. | Revisar la política y ensayar PV-12/PV-13 con fragmentos prolongados. |
-| Envíos con bloqueos | Un `sendall()` lento puede mantener tomado el bloqueo del estado y retrasar otras operaciones. | Evaluar concurrencia y demoras antes de concluir sobre RNF3. |
-| Último `SET` pendiente | La recepción ordenada no garantiza aplicación de todos los estados intermedios. | Evaluar PV-09 separando reconstrucción, consumo y actuación. |
-| Temporización local | `connect` y ECHO pueden esperar; parpadeo y watchdog se atienden desde el ciclo principal. | Medir frecuencia, apagado y respuesta con el hardware real. |
-| Exactitud y adquisición | Conversión simulada y publicaciones TCP no equivalen a error físico ni conteo de todas las adquisiciones. | Incluir 3 cm en PN-02 y distinguir adquisición de recepción en PN-04. |
-| Evidencia y cobertura | El reporte automatizado carece de respaldo confirmado; las evidencias conservadas de P1 no prueban P2. | Incorporar registros reproducibles y evidencia específica de los tres equipos. |
-
-Para PN-03, el origen temporal debe ser el cambio físico de distancia/rango, no únicamente el momento en que el objeto queda quieto o llega un `POST`. Para PN-01, el log de la PC debe complementarse con eventos de ambas placas. Estas limitaciones no modifican los objetivos; delimitan las conclusiones que pueden sostenerse.
-
-**Comparación cuantitativa, errores y cobertura experimental:** [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA]
+La sesión de 24 minutos supera el objetivo de estabilidad y los cinco tiempos registrados respetan 1 s. La cadencia observada de 3.9 lecturas/s se aproxima al nominal de 4, sin convertirla en garantía temporal permanente. Estos resultados se interpretan en las posiciones y ventanas ensayadas; la cobertura de exactitud y las características del servidor se analizan en §4.7.
 
 ## 6. Conclusiones
 
-La implementación disponible responde a la organización distribuida exigida por la práctica: dos objetos clientes TCP y una PC como entidad central de control. El código separa adquisición, decisión y actuación, y permite identificar los componentes que desarrollan RF1–RF4. Esta conclusión describe la estructura del software; no acredita todavía un prototipo físicamente validado.
+La Práctica 2 alcanzó un prototipo distribuido operativo con dos ESP32, un HC-SR04, tres LEDs y un servidor TCP Python. Las fotografías, publicaciones serie, registros del servidor y aceptación del actuador respaldan la separación efectiva entre adquisición, procesamiento y actuación. La clasificación permanece centralizada y utiliza un protocolo ASCII con mensajes delimitados por LF.
 
-La combinación de C++ en los ESP32 y Python en la PC mantiene responsabilidades delimitadas. Las clases de hardware encapsulan pines, estados y tiempos; el dominio Python concentra los cuatro rangos contiguos y su lógica de actuación. Los programas principales coordinan objetos y reutilizan `ClienteTcp` y la biblioteca común, mientras que el servidor no depende de ejecutar código C++.
+Los cuatro rangos permiten distinguir cercanía, distancia intermedia, verde y Lejos. El código define rojo a 4 Hz y los demás parpadeos a 2 Hz; el controlador sincroniza Lejos sin reiniciar su fase con órdenes idénticas. La evidencia visual respalda la actuación, el parpadeo y el apagado por lectura inválida, con el alcance definido en §4.2.2.
 
-El protocolo de texto define roles, mensajes y delimitación de forma explícita. Sus implementaciones incluyen reconstrucción del flujo TCP y validación antes de aplicar comandos, distinguiendo lecturas inválidas de errores de comunicación. La política de conservar el último comando pendiente expresa una actuación sobre el estado más reciente y debe considerarse al evaluar secuencias con varios mensajes.
+Los resultados cuantitativos registran 24 minutos sin los eventos adversos evaluados, un error individual máximo de 0.90 cm en la serie de 5–40 cm, respuestas de hasta 0.62 s y 3.9 lecturas/s en una ventana de 10 s. Se satisfacen los criterios numéricos en esos ensayos. El cumplimiento de exactitud se circunscribe a las posiciones ensayadas de 5–40 cm; extender la evaluación al resto del intervalo declarado de 3–150 cm constituye una mejora futura.
 
-El código incorpora recuperación mediante limpieza de buffers, reconexión y nuevo registro, además de apagado inicial, por pérdida de registro y por ausencia de comandos. Son mecanismos implementados cuya efectividad y tiempos reales todavía deben verificarse. La diferencia entre el timeout por operación del servidor y la supervisión original impide concluir que toda la política prevista de caducidad se cumple.
+La reconexión terminó con registro aceptado después de un rechazo role_busy. Este resultado respalda la recuperación implementada y también muestra por qué deben preservarse las incidencias. Los 230 controles C++ y 26 métodos Python complementan las pruebas físicas con casos controlados de protocolo, límites y fallos; las dos modalidades de validación aportan evidencia distinta.
 
-Las seis suites C++ y los 26 métodos Python proporcionan una base de validación con simulación y sockets locales. El 7/7 histórico informado por el equipo sigue separado de la ejecución local del 15/11/2026, que confirmó 230 comprobaciones C++ y 26 métodos Python para la lógica actualizada. Estos ensayos no permiten establecer conclusiones experimentales físicas sobre exactitud, estabilidad, tiempo extremo a extremo o frecuencia de adquisición.
-
-El objetivo general cuenta con diseño y componentes implementados; su validación integral permanece abierta. Para completar la evaluación académica deben ejecutarse y documentarse los casos de §4, revisar RNF5 y relacionar cada conclusión de cumplimiento con evidencia específica de P2, sin trasladar los resultados del montaje anterior.
-
-**Conclusiones experimentales y aceptación integral de requisitos:** [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA]
+La organización en clases y módulos mantiene interfaces claras entre hardware, transporte y dominio. El timeout por operación y los envíos bajo bloqueo global son compromisos técnicos vigentes: los ensayos favorables del prototipo no demuestran que esas limitaciones estén resueltas.
 
 ## 7. Recomendaciones
 
-Las recomendaciones siguientes son acciones propuestas a partir de los hallazgos documentados; no se presentan como correcciones realizadas.
-
-| Hallazgo que sustenta la recomendación | Recomendación técnica | Prioridad y validación propuesta |
-|---|---|---|
-| Integración física sin evidencia confirmada | Verificar cableado de ambos objetos, divisor ECHO, resistencias, alimentación, configuración WiFi y acceso a la PC; registrar roles y recorrido completo. | Alta; seguir §3.1 y la guía de montaje, documentando PV-01 a PV-16 según corresponda. |
-| RNF1–RNF4 sin resultados medidos | Realizar PN-01 a PN-04 con instrumentos y ventanas definidos: ≥ 10 min, error máximo ≤ 3 cm en 3–150 cm, respuesta ≤ 1 s y adquisición ≥ 2 lecturas/s. | Alta; conservar datos originales, repeticiones, inválidos, máximos y condiciones del ensayo. |
-| Procedimiento físico armonizado, sin ensayos acreditados | Aplicar la referencia de 3 cm, el instante inicial del cambio físico y los conteos separados de adquisición y recepción; conservar registros de los tres equipos. | Alta; seguir §4.3 a §4.6 y la guía actualizada al medir. |
-| Timeout por operación distinto del diseño | Revisar si la política debe medir tiempo desde la apertura/último mensaje completo y acordar su implementación o justificación explícita, sin cambiar silenciosamente los requisitos. | Alta; ensayos de silencio y fragmentos prolongados de PV-12/PV-13. |
-| Envíos realizados con bloqueo del estado | Evaluar el efecto de clientes lentos y de los envíos sobre la concurrencia; considerar reducir el tiempo de bloqueo según resultados. | Alta; registrar demoras y relacionarlas con RNF3, sin asumir una mejora ya aplicada. |
-| Watchdog y recuperación dependientes del ciclo | Verificar pérdida WiFi/TCP, reinicio del servidor, ausencia de comandos y nuevo registro, distinguiendo reintentos TCP de asociación WiFi. | Alta; PV-14/PV-15 y PF-04 con consolas, video y registros. |
-| Fase y último comando pendiente | Medir ambas frecuencias con video, enviar modos idénticos y agrupar comandos para observar consumo del último estado; comprobar reinicio desde encendido tras apagado. | Alta; PV-05/PV-09 y PF-03, diferenciando recepción de actuación. |
-| Ejecución reportada sin registros verificables | Conservar salida completa de las suites, entorno, fecha, versión, omisiones y resultado; incorporar evidencias mediante el índice de §8.2. | Alta; corroborar el reporte 7/7 sin convertirlo en resultado confirmado antes del respaldo. |
-| RNF5 requiere revisión integral | Completar un acta por criterio con enlaces al código, decisiones sobre limitaciones y responsables verificables. | Media; seguir §3.4 y registrar los aportes con respaldo documental y de autoría. |
+| Acción | Justificación |
+|---|---|
+| Ampliar PN-02 hasta 150 cm, con referencia en 3 cm y repeticiones en todo el intervalo declarado. | Completar la cobertura del criterio original sin extrapolar la serie de 5–40 cm. |
+| Incorporar a futuras sesiones una ficha de medición con instrumento, resolución, transición e instantes de referencia. | Facilitar la reproducción y comparación de los ensayos de respuesta ya realizados. |
+| Separar conteos de adquisiciones, lecturas inválidas, publicaciones y POST recibidos en PN-04. | Distinguir cadencia de adquisición y entrega TCP. |
+| Contar ciclos y desfase de los LEDs mediante una grabación adecuada o medición eléctrica. | Cuantificar las frecuencias y la sincronización que hoy se respaldan nominalmente por código y visualmente por el equipo. |
+| Conservar bitácoras completas, versiones de firmware, fecha y condiciones por sesión. | Complementar el PDF y el registro CTest; separar estabilidad de fallos provocados. |
+| Conservar el caso de recuperación tras role_busy y revisar las advertencias de core dump si reaparecen en nuevos arranques. | Aprovechar la incidencia recuperada como caso de diagnóstico y dar seguimiento a la advertencia histórica, sin confundirla con fallos de la sesión de estabilidad. |
+| Evaluar un plazo de sesión desde el último mensaje completo y el impacto de sendall bajo bloqueo global. | Mejoras futuras para clientes lentos y fragmentación prolongada; no se presentan como correcciones ya realizadas. |
 
 ## 8. Anexos
 
-### 8.1 Documentación y diagramas de referencia
+### 8.1 Documentación y diagramas
 
-| Anexo | Documento existente | Uso |
+La [consigna oficial](docs/consigna/Práctica_2.md), el [diseño del sistema](docs/diagramas/Diseno_del_sistema.md), la [guía de montaje](docs/GUIA_MONTAJE.md) y el [procedimiento de pruebas físicas](docs/PRUEBAS_FISICAS.md) permiten reproducir la organización del trabajo. Los diagramas Mermaid de §2 forman parte del informe; los originales de circuito son [sensor](docs/diagramas/circuito-sensor.svg) y [actuador](docs/diagramas/circuito-actuador.svg), coherentes con GPIO23/18 y GPIO25/26/27.
+
+Las [fotografías del sensor](docs/evidencias/sensor.jpeg) y [del actuador](docs/evidencias/actuador.jpeg) documentan los dos objetos independientes. Los materiales de P1 pertenecen al [informe histórico](docs/historico/INFORME_P1.md) y no se usan para justificar resultados de P2.
+
+### 8.2 Índice de evidencias
+
+| Identificador | Archivo o localización | Qué respalda |
 |---|---|---|
-| A | [Consigna oficial P2](docs/consigna/Práctica_2.md). | Requisitos, entregables y rúbrica. |
-| B | [Diseño del sistema P2](docs/diagramas/Diseno_del_sistema.md). | Propuesta original; contrastar sus políticas con la implementación descrita en §2 y §3. |
-| C | [Circuito sensor](docs/diagramas/circuito-sensor.svg) y [circuito actuador](docs/diagramas/circuito-actuador.svg). | Esquemas diseñados; no acreditan el montaje físicamente verificado. |
-| D | [Informe P1 conservado](docs/historico/INFORME_P1.md). | Referencia histórica; sus resultados y evidencias corresponden a P1. |
-| E | [Guía de montaje](docs/GUIA_MONTAJE.md) y [pruebas físicas](docs/PRUEBAS_FISICAS.md). | Documentación del montaje declarado y procedimientos PN armonizados; ensayos y resultados verificables pendientes. |
-| F | [Resumen del equipo](docs/RESUMEN_PARA_INFORME.md) y [plan de implementación](docs/PLAN_IMPLEMENTACION.md). | Avances reportados y evolución; sus afirmaciones de ejecución requieren registros verificables. |
-| G | [README](README.md), [guía del firmware](apps/firmware/README.md) y [guía del servidor](apps/servidor/README.md). | Configuración y reproducción; la estructura vigente prevalece sobre descripciones históricas. |
+| EV-P2-01 | [Sensor](docs/evidencias/sensor.jpeg), [actuador](docs/evidencias/actuador.jpeg), PDF pp. 1–2. | Montaje, componentes, referencia con regla; §2.2/§2.3 y RF1. |
+| EV-P2-02 | [Registro completo](<docs/evidencias/Registro de Pruebas RF y RFN.pdf>), p. 4; [servidor](<docs/evidencias/Registro de Pruebas RF y RFN.pdf#page=4>), [actuador](<docs/evidencias/Registro de Pruebas RF y RFN.pdf#page=4>), [recuperación](<docs/evidencias/Registro de Pruebas RF y RFN.pdf#page=4>). | RF4, PV-07 y PV-15; mensajes, asociación y reintento. |
+| EV-P2-03 | PDF pp. 2–3; [video LEDs](docs/evidencias/leds.mp4); [invalidez](<docs/evidencias/Registro de Pruebas RF y RFN.pdf#page=3>), [apagado](<docs/evidencias/Registro de Pruebas RF y RFN.pdf#page=3>). | RF1–RF3, actuación observada e invalidez. |
+| EV-P2-04 | PDF p. 5, tabla RNF1. | PN-01: 24 minutos y eventos registrados. |
+| EV-P2-05 | PDF p. 5, tabla RNF2; transcripción y recálculo en §4.4. | PN-02: 21 lecturas, promedios y errores. |
+| EV-P2-06 | PDF pp. 5–6, tabla RNF3. | PN-03: cinco tiempos, promedio 0.526 s y máximo 0.62 s. |
+| EV-P2-07 | PDF p. 6, tabla RNF4. | PN-04: 39 lecturas en 10 s. |
+| EV-P2-08 | Revisión del código en §3.4 y archivos enlazados en §2.4/§8.3. | RNF5; inspección documental del 17/11/2026 sobre 3a25f24. |
+| EV-P2-09 | Registro local original `.pio/build/pruebas_control/Testing/Temporary/LastTest.log`; [resumen de ejecuciones](docs/RESUMEN_PARA_INFORME.md#4-pruebas-automatizadas-para-4-separadas-de-las-físicas). | Seis suites nativas aprobadas; el resumen conserva antecedentes Python/compilación. Resultados de Python y compilación referidos al resumen de ejecuciones. |
 
-### 8.2 Índice de evidencias de la Práctica 2
-
-No se reutilizan las fotografías ni el PDF de la Práctica 1 como pruebas del sistema distribuido. Los identificadores siguientes reservan evidencias por incorporar; **no representan archivos existentes**. La documentación propone `docs/evidencias/p2/` como destino futuro, sin enlazar fotografías o registros aún no disponibles.
-
-| ID reservado | Evidencia por incorporar | Prueba o sección relacionada | Archivo / enlace | Fecha, responsable y versión |
-|---|---|---|---|---|
-| EV-P2-01 | Fotografías de ambos objetos y del montaje distribuido. | §2.2, §2.3 y §4.1. | [PENDIENTE DE EVIDENCIA] | [PENDIENTE DE EVIDENCIA] |
-| EV-P2-02 | Registros de mensajes, roles, errores y recuperación. | RF4; PV-06 a PV-16. | [PENDIENTE DE EVIDENCIA] | [PENDIENTE DE EVIDENCIA] |
-| EV-P2-03 | Registros funcionales, límites y parpadeo. | PV-01 a PV-05. | [PENDIENTE DE EVIDENCIA] | [PENDIENTE DE EVIDENCIA] |
-| EV-P2-04 | Registro continuo de estabilidad de los tres equipos. | PN-01. | [PENDIENTE DE EVIDENCIA] | [PENDIENTE DE EVIDENCIA] |
-| EV-P2-05 | Lecturas originales y referencia física. | PN-02. | [PENDIENTE DE EVIDENCIA] | [PENDIENTE DE EVIDENCIA] |
-| EV-P2-06 | Grabación o registro temporal extremo a extremo. | PN-03. | [PENDIENTE DE EVIDENCIA] | [PENDIENTE DE EVIDENCIA] |
-| EV-P2-07 | Conteos y ventanas de adquisición y recepción. | PN-04. | [PENDIENTE DE EVIDENCIA] | [PENDIENTE DE EVIDENCIA] |
-| EV-P2-08 | Acta de revisión integral del código y decisiones sobre hallazgos. | RNF5 y §3.4. | [PENDIENTE DE EVIDENCIA] | [PENDIENTE DE EVIDENCIA] |
-| EV-P2-09 | Salidas completas de CTest/unittest y datos del entorno ejecutado. | §4.1.1 y reporte automatizado de §5.1. | [PENDIENTE DE EVIDENCIA] | [PENDIENTE DE EVIDENCIA] |
-
-Cada registro debe identificar método, versión evaluada, origen simulado/local/físico y caso relacionado. Una fotografía estática no prueba frecuencia ni latencia; estas requieren registros temporales adecuados. Las evidencias fallidas y las repeticiones posteriores deben conservarse para fundamentar el análisis.
+El PDF original conserva las fotografías y capturas que respaldan los resultados. Se enlazan sus páginas sin almacenar extractos redundantes. El video y las fotografías independientes permanecen en `docs/evidencias/`. El registro CTest se conserva únicamente en su ubicación local original, fuera del árbol versionado. Las capturas del PDF constituyen el respaldo documental de la comunicación incorporado al informe.
 
 ### 8.3 Código y reproducción de la Práctica 2
 
@@ -1275,7 +1261,7 @@ docs/
   consigna/              Enunciados oficiales
   diagramas/             Diseño y circuitos SVG
   historico/             Informe P1
-  evidencias/            Evidencias históricas; evidencia específica P2 pendiente
+  evidencias/            PDF original, sensor.jpeg, actuador.jpeg y leds.mp4
   GUIA_MONTAJE.md
   PRUEBAS_FISICAS.md
   RESUMEN_PARA_INFORME.md
@@ -1294,7 +1280,7 @@ El archivo local `ConfiguracionRed.h` debe prepararse a partir del ejemplo y no 
 | Cliente y configuración | [ClienteTcp.h](apps/firmware/include/ClienteTcp.h), [ClienteTcp.cpp](apps/firmware/src/ClienteTcp.cpp), [ConfiguracionRed.example.h](apps/firmware/include/ConfiguracionRed.example.h), [platformio.ini](platformio.ini). | RF4; §3.1 y §3.2. |
 | Biblioteca C++ | [Tipos.h](apps/firmware/lib/Compartido/Tipos.h), [ProtocoloAplicacion.h](apps/firmware/lib/Compartido/ProtocoloAplicacion.h), [ProtocoloAplicacion.cpp](apps/firmware/lib/Compartido/ProtocoloAplicacion.cpp), [ReceptorLineas.h](apps/firmware/lib/Compartido/ReceptorLineas.h), [ReceptorLineas.cpp](apps/firmware/lib/Compartido/ReceptorLineas.cpp). | §2.6 y §3.3. |
 | Servidor y control | [__main__.py](apps/servidor/__main__.py), [servidor.py](apps/servidor/servidor.py), [dominio.py](apps/servidor/dominio.py), [protocolo.py](apps/servidor/protocolo.py). | RF2 y RF4; §3.3. |
-| Pruebas | [Suites nativas](tests/native/), [suites Python](tests/python/), [CMakeLists.txt](CMakeLists.txt). | §4.1.1; alcance y evidencia pendiente. |
+| Pruebas | [Suites nativas](tests/native/), [suites Python](tests/python/), [CMakeLists.txt](CMakeLists.txt). | §4.1.1; alcance y registro CTest. |
 | Herramientas | [simular_sensor.py](tools/simular_sensor.py), [simular_actuador.py](tools/simular_actuador.py), [analizar_registro.py](tools/analizar_registro.py). | §4.1.2. |
 
 #### Comandos reproducibles
@@ -1309,7 +1295,7 @@ pio run -e actuador -t upload --upload-port COMy
 py -3.13 -m apps.servidor --ip 0.0.0.0 --puerto 5000
 ```
 
-Para conservar evidencia del servidor, la guía documenta la opción `--registro docs/evidencias/p2/servidor.log`. Las placas deben usar la IPv4 real de la PC, no `0.0.0.0`. Identificar la red y comprobar el puerto efectivo antes del ensayo.
+Para conservar evidencia del servidor, la guía documenta la opción `--registro docs/evidencias/servidor.log`. Las placas deben usar la IPv4 real de la PC, no `0.0.0.0`. Identificar la red y comprobar el puerto efectivo antes del ensayo.
 
 Para aislar un rol con los clientes de prueba, utilizar terminales separadas; cerrar el simulador del mismo rol antes de conectar su placa:
 
@@ -1327,20 +1313,16 @@ cmake --build build/windows
 ctest --test-dir build/windows --output-on-failure
 ```
 
-Guardar la salida, fecha, versión, herramientas y casos omitidos al ejecutar. La preparación del entorno y los resultados verificables deben registrarse en EV-P2-09; el ensayo físico se documenta separadamente en EV-P2-01 a EV-P2-07.
+Para futuras ejecuciones, conservar salida, fecha, versión y casos omitidos. CTest registra Python solo si encuentra 3.13 según su configuración; la revisión previa ejecutó Python 3.12.6 por separado. Sustituir `py -3.13` por `py -3.12` permite reproducir esa ejecución ya documentada. Estos comandos no se ejecutaron durante la revisión final.
+
 
 ### 8.4 Aportes del grupo
 
-La distribución siguiente es **información declarada y confirmada por el equipo**. Los commits ya identificados respaldan adicionalmente cambios de software y documentación, pero no constituyen evidencia fotográfica ni resultados experimentales. El desarrollo y montaje físico se atribuyen conjuntamente a Santiago y Ariel, sin asignarlos de forma exclusiva a uno de ellos.
+La distribución es información declarada por el equipo; los commits citados se verificaron en el historial disponible. El montaje físico se atribuye conjuntamente a ambos integrantes. Las fotografías documentan los objetos, no la autoría individual de una conexión.
 
-| Integrante | Aportes declarados por el equipo | Respaldo adicional disponible |
+| Integrante | Aportes declarados | Respaldo adicional |
 |---|---|---|
-| Santiago Javier Torres Vacaflores | Desarrollo y montaje físico de los componentes junto a Ariel; elaboración del informe técnico; elaboración de diagramas y documentación del proyecto; revisión y actualización técnica del informe. | Autor Git previamente identificado: `Santiago Torres Vacaflores`. `3b3b2bb`, `e72ec7a` y `9d2213a` respaldan actualizaciones de [INFORME.md](INFORME.md). El montaje conjunto se registra según declaración del equipo; fotografías y registros: [PENDIENTE DE EVIDENCIA]. |
-| Ariel Adrian Mercado Alegre | Planificación de la arquitectura y del desarrollo del software; codificación de los componentes del proyecto, incluyendo firmware y servidor; desarrollo y montaje físico de los componentes junto a Santiago. | Autor Git previamente identificado: `Adrián Mercado`. `151e61d` y `89c755b` respaldan clientes sensor/actuador; `1d15d3b`, módulos Python; `1090c15`, simplificación de firmware, servidor y documentación. El montaje conjunto se registra según declaración del equipo; fotografías y registros: [PENDIENTE DE EVIDENCIA]. |
+| Santiago Javier Torres Vacaflores | Desarrollo y montaje físico junto a Ariel; elaboración del informe, diagramas y documentación; revisión y actualización técnica. | Autor Santiago Torres Vacaflores en 3b3b2bb, e72ec7a y 9d2213a (informe/diagramas), y 3a25f24 (integración y documentación). |
+| Ariel Adrian Mercado Alegre | Planificación de arquitectura y desarrollo; codificación del firmware y servidor; desarrollo y montaje físico junto a Santiago. | Autor Adrián Mercado en 151e61d y 89c755b (clientes sensor/actuador), 1d15d3b (arquitectura) y 1090c15 (simplificación y guías). |
 
-Las rutas iniciales del cliente estaban bajo `src/cliente/`; `1090c15` las trasladó a las rutas vigentes de §8.3. Se conservan estas referencias ya verificadas sin realizar nuevas operaciones Git en este cierre. La declaración de montaje realizado no implica integración operativa demostrada, pruebas físicas aprobadas ni cumplimiento acreditado de los requisitos.
-
-**Fotografías y registros del montaje conjunto realizado:** [PENDIENTE DE EVIDENCIA]
-
-**Integración, funcionamiento y mediciones físicas verificables:** [PENDIENTE DE MEDICIÓN] / [PENDIENTE DE EVIDENCIA]
-
+El [expediente físico](<docs/evidencias/Registro de Pruebas RF y RFN.pdf>), la [fotografía del sensor](docs/evidencias/sensor.jpeg) y [del actuador](docs/evidencias/actuador.jpeg) y el [video](docs/evidencias/leds.mp4) respaldan la práctica conjunta. Los commits complementan la declaración de aportes sin convertir un trabajo conjunto en una contribución exclusiva.
