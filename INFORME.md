@@ -1008,10 +1008,10 @@ Las capturas de comunicación de la página 4 están fechadas el **17/11/2026**:
 
 Ejecutamos las pruebas automatizadas sobre el código final y guardamos la salida completa, con fecha y commit, en [docs/evidencias/pruebas/](docs/evidencias/pruebas/):
 
-- [python.txt](docs/evidencias/pruebas/python.txt): los **29 métodos Python** ejecutados en la PC con `unittest`.
-- [ctest.txt](docs/evidencias/pruebas/ctest.txt): las **seis suites C++** y la suite Python ejecutadas con CTest en GitHub Actions.
+- [python.txt](docs/evidencias/pruebas/python.txt): **29 de 29 métodos Python** aprobados, ejecutados en la PC con `unittest` (Python 3.13, Windows 11).
+- [ctest.txt](docs/evidencias/pruebas/ctest.txt): **7 de 7 pruebas de CTest** aprobadas en GitHub Actions (Ubuntu, g++ 15.2, Python 3.13): las seis suites C++ con **230 de 230 comprobaciones** y la suite Python con sus 29 métodos.
 
-El workflow [pruebas.yml](.github/workflows/pruebas.yml) repite esa ejecución y compila los entornos `sensor` y `actuador` con PlatformIO en cada push, de modo que cada commit del repositorio queda con su resultado.
+El workflow [pruebas.yml](.github/workflows/pruebas.yml) repite esa ejecución y compila los entornos `sensor` y `actuador` con PlatformIO en cada push, de modo que cada commit del repositorio queda con su resultado. Ambos firmwares también compilan en la PC con `pio run -e sensor -e actuador`.
 
 | Suite | Cantidad | Alcance |
 |---|---:|---|
@@ -1211,7 +1211,7 @@ Los cuatro rangos permiten distinguir cercanía, distancia intermedia, verde y L
 
 Los resultados cuantitativos registran 24 minutos sin reinicios, bloqueos ni desconexiones, un error individual máximo de 0.90 cm en la serie de 5–40 cm, respuestas de hasta 0.62 s y 3.9 lecturas/s en una ventana de 10 s. Todos cumplen sus criterios; la exactitud se verificó en 5–40 cm, que abarca los cuatro rangos de control.
 
-La reconexión terminó con registro aceptado después de un rechazo role_busy, lo que muestra que la recuperación automática funciona. Las pruebas automatizadas C++ y Python complementan las pruebas físicas con casos controlados de protocolo, límites, plazos y fallos que no se pueden provocar a mano de forma repetible.
+La reconexión terminó con registro aceptado después de un rechazo role_busy, lo que muestra que la recuperación automática funciona. Las pruebas automatizadas, con 230 comprobaciones C++ y 29 métodos Python aprobados, complementan las pruebas físicas con casos controlados de protocolo, límites, plazos y fallos que no se pueden provocar a mano de forma repetible.
 
 La organización en clases y módulos mantiene interfaces claras entre hardware, transporte y dominio. El servidor cumple el diseño: el plazo de 2 s se cuenta desde la última línea completa y los envíos se hacen fuera del bloqueo del estado, así que un cliente lento o fragmentado no afecta a los demás.
 

@@ -1,0 +1,108 @@
+Ejecucion de GitHub Actions: https://github.com/JustAdrianMercado/Integracion-de-Objetos-Inteligentes-con-TCP-IP/actions/runs/44195942926
+Commit: ae3d2a5d6ab4ee030ff231634e576e7ccce5da2b
+Fecha (UTC): 2026-11-17 23:03:51
+Compilador: c++ (Ubuntu 15.2.0-16ubuntu1) 15.2.0
+Python: Python 3.13.18
+
+UpdateCTestConfiguration  from :<repo>/build/DartConfiguration.tcl
+Parse Config file:<repo>/build/DartConfiguration.tcl
+Test project <repo>/build
+Constructing a list of tests
+Done constructing a list of tests
+Updating test list for fixtures
+Added 0 tests to meet fixture requirements
+Checking test dependency graph...
+Checking test dependency graph end
+test 1
+    Start 1: protocolo_aplicacion
+
+1: Test command: <repo>/build/tests/native/pruebas_protocolo_aplicacion
+1: Working Directory: <repo>/build/tests/native
+1: Test timeout computed to be: 1500
+1: 29 de 29 comprobaciones del protocolo aprobadas.
+1/7 Test #1: protocolo_aplicacion .............   Passed    0.00 sec
+test 2
+    Start 2: receptor_lineas
+
+2: Test command: <repo>/build/tests/native/pruebas_receptor_lineas
+2: Working Directory: <repo>/build/tests/native
+2: Test timeout computed to be: 1500
+2: 23 de 23 comprobaciones del receptor aprobadas.
+2/7 Test #2: receptor_lineas ..................   Passed    0.00 sec
+test 3
+    Start 3: cliente_tcp
+
+3: Test command: <repo>/build/tests/native/pruebas_cliente_tcp
+3: Working Directory: <repo>/build/tests/native
+3: Test timeout computed to be: 1500
+3: 76 de 76 comprobaciones del cliente TCP aprobadas.
+3/7 Test #3: cliente_tcp ......................   Passed    0.00 sec
+test 4
+    Start 4: controlador_leds
+
+4: Test command: <repo>/build/tests/native/pruebas_controlador_leds
+4: Working Directory: <repo>/build/tests/native
+4: Test timeout computed to be: 1500
+4: 53 de 53 comprobaciones del controlador de LEDs aprobadas.
+4/7 Test #4: controlador_leds .................   Passed    0.00 sec
+test 5
+    Start 5: principal_sensor
+
+5: Test command: <repo>/build/tests/native/pruebas_principal_sensor
+5: Working Directory: <repo>/build/tests/native
+5: Test timeout computed to be: 1500
+5: 19 de 19 comprobaciones del principal sensor aprobadas.
+5/7 Test #5: principal_sensor .................   Passed    0.00 sec
+test 6
+    Start 6: principal_actuador
+
+6: Test command: <repo>/build/tests/native/pruebas_principal_actuador
+6: Working Directory: <repo>/build/tests/native
+6: Test timeout computed to be: 1500
+6: 30 de 30 comprobaciones del principal actuador aprobadas.
+6/7 Test #6: principal_actuador ...............   Passed    0.00 sec
+test 7
+    Start 7: servidor_python
+
+7: Test command: /opt/hostedtoolcache/Python/3.13.18/x64/bin/python3.13 "-m" "unittest" "discover" "-s" "tests/python" "-v"
+7: Working Directory: <repo>
+7: Test timeout computed to be: 90
+7: test_lecturas_invalidas_apagan (test_protocolo.PruebasDominio.test_lecturas_invalidas_apagan) ... ok
+7: test_limites_de_los_rangos (test_protocolo.PruebasDominio.test_limites_de_los_rangos) ... ok
+7: test_codificar_agrega_lf (test_protocolo.PruebasMensajes.test_codificar_agrega_lf) ... ok
+7: test_mensajes_invalidos (test_protocolo.PruebasMensajes.test_mensajes_invalidos) ... ok
+7: test_mensajes_validos (test_protocolo.PruebasMensajes.test_mensajes_validos) ... ok
+7: test_todas_las_combinaciones_de_leds (test_protocolo.PruebasMensajes.test_todas_las_combinaciones_de_leds) ... ok
+7: test_fragmentos_y_lineas_consecutivas (test_protocolo.PruebasReceptor.test_fragmentos_y_lineas_consecutivas) ... ok
+7: test_limite_y_bytes_no_permitidos (test_protocolo.PruebasReceptor.test_limite_y_bytes_no_permitidos) ... ok
+7: test_actuador_recibe_la_ultima_lectura_reciente (test_servidor.PruebasServidor.test_actuador_recibe_la_ultima_lectura_reciente) ... ok
+7: test_cierre_del_servidor_cierra_clientes (test_servidor.PruebasServidor.test_cierre_del_servidor_cierra_clientes) ... ok
+7: test_desconexion_del_sensor_apaga (test_servidor.PruebasServidor.test_desconexion_del_sensor_apaga) ... ok
+7: test_envio_lento_al_actuador_no_bloquea_el_estado (test_servidor.PruebasServidor.test_envio_lento_al_actuador_no_bloquea_el_estado) ... ok
+7: test_error_se_entrega_aunque_el_cliente_siga_enviando (test_servidor.PruebasServidor.test_error_se_entrega_aunque_el_cliente_siga_enviando) ... ok
+7: test_fragmentos_sin_lf_no_prolongan_el_registro (test_servidor.PruebasServidor.test_fragmentos_sin_lf_no_prolongan_el_registro) ... ok
+7: test_fragmentos_sin_lf_no_prolongan_la_sesion_del_sensor (test_servidor.PruebasServidor.test_fragmentos_sin_lf_no_prolongan_la_sesion_del_sensor) ... ok
+7: test_fragmentos_y_varios_mensajes_por_bloque (test_servidor.PruebasServidor.test_fragmentos_y_varios_mensajes_por_bloque) ... ok
+7: test_linea_larga_cr_y_nul (test_servidor.PruebasServidor.test_linea_larga_cr_y_nul) ... ok
+7: test_mensaje_antes_del_registro (test_servidor.PruebasServidor.test_mensaje_antes_del_registro) ... ok
+7: test_mensajes_que_no_corresponden_al_rol (test_servidor.PruebasServidor.test_mensajes_que_no_corresponden_al_rol) ... ok
+7: test_puerto_ocupado (test_servidor.PruebasServidor.test_puerto_ocupado) ... ok
+7: test_rangos_limites_y_comandos_identicos (test_servidor.PruebasServidor.test_rangos_limites_y_comandos_identicos) ... ok
+7: test_reconexion_del_actuador_conserva_la_lectura (test_servidor.PruebasServidor.test_reconexion_del_actuador_conserva_la_lectura) ... ok
+7: test_registro_vencido (test_servidor.PruebasServidor.test_registro_vencido) ... ok
+7: test_rol_ocupado_no_afecta_al_original (test_servidor.PruebasServidor.test_rol_ocupado_no_afecta_al_original) ... ok
+7: test_sensor_sin_post_durante_2_s_se_cierra_y_apaga (test_servidor.PruebasServidor.test_sensor_sin_post_durante_2_s_se_cierra_y_apaga) ... ok
+7: test_analizar_registro (test_simuladores.PruebasSimuladores.test_analizar_registro) ... ok
+7: test_flujo_completo_y_apagado_al_desconectar_el_sensor (test_simuladores.PruebasSimuladores.test_flujo_completo_y_apagado_al_desconectar_el_sensor) ... ok
+7: test_rol_ocupado (test_simuladores.PruebasSimuladores.test_rol_ocupado) ... ok
+7: test_sensor_simulado_normaliza_como_el_esp32 (test_simuladores.PruebasSimuladores.test_sensor_simulado_normaliza_como_el_esp32) ... ok
+7: 
+7: ----------------------------------------------------------------------
+7: Ran 29 tests in 10.455s
+7: 
+7: OK
+7/7 Test #7: servidor_python ..................   Passed   11.08 sec
+
+100% tests passed out of 7
+
+Total Test time (real) =  11.13 sec
