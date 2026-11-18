@@ -1,4 +1,4 @@
-"""Resume un registro del servidor: py -3.13 -m tools.analizar_registro docs/evidencias/p2/servidor.log
+"""Resume un registro del servidor: py -3.13 -m tools.analizar_registro docs/evidencias/servidor.log
 
 Calcula lo que piden PN-01 (operacion continua) y PN-04 (lecturas por segundo).
 """

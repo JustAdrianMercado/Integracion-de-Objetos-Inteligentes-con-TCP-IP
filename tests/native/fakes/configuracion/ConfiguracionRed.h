@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 
-// Datos ficticios usados solo por el firmware compilado para las pruebas nativas.
+// Red de prueba: solo la usa el firmware compilado para las pruebas nativas.
 namespace ConfiguracionRed {
 constexpr char SSID[] = "red-de-prueba";
 constexpr char CLAVE[] = "clave-de-prueba";

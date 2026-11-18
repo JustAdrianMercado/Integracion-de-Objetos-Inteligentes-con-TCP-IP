@@ -13,6 +13,7 @@ enum class ResultadoRecepcion : std::uint8_t {
 // Una instancia por conexion. No reserva memoria dinamica ni depende de sockets.
 class ReceptorLineas {
 public:
+    // Agrega un byte recibido; informa si la linea sigue incompleta, termino o es invalida.
     ResultadoRecepcion agregar(char byte);
 
     // Solo devuelve texto despues de LineaCompleta. Leerlo antes del siguiente byte.

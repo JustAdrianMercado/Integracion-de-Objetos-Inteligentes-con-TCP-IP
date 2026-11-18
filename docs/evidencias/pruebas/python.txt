@@ -1,0 +1,40 @@
+Commit: ae3d2a5d6ab4ee030ff231634e576e7ccce5da2b
+Fecha: 2026-11-17 19:04:26 -04:00
+Python: Python 3.13.15
+Sistema: Windows 11
+Comando: py -3.13 -m unittest discover -s tests/python -v
+
+test_lecturas_invalidas_apagan (test_protocolo.PruebasDominio.test_lecturas_invalidas_apagan) ... ok
+test_limites_de_los_rangos (test_protocolo.PruebasDominio.test_limites_de_los_rangos) ... ok
+test_codificar_agrega_lf (test_protocolo.PruebasMensajes.test_codificar_agrega_lf) ... ok
+test_mensajes_invalidos (test_protocolo.PruebasMensajes.test_mensajes_invalidos) ... ok
+test_mensajes_validos (test_protocolo.PruebasMensajes.test_mensajes_validos) ... ok
+test_todas_las_combinaciones_de_leds (test_protocolo.PruebasMensajes.test_todas_las_combinaciones_de_leds) ... ok
+test_fragmentos_y_lineas_consecutivas (test_protocolo.PruebasReceptor.test_fragmentos_y_lineas_consecutivas) ... ok
+test_limite_y_bytes_no_permitidos (test_protocolo.PruebasReceptor.test_limite_y_bytes_no_permitidos) ... ok
+test_actuador_recibe_la_ultima_lectura_reciente (test_servidor.PruebasServidor.test_actuador_recibe_la_ultima_lectura_reciente) ... ok
+test_cierre_del_servidor_cierra_clientes (test_servidor.PruebasServidor.test_cierre_del_servidor_cierra_clientes) ... ok
+test_desconexion_del_sensor_apaga (test_servidor.PruebasServidor.test_desconexion_del_sensor_apaga) ... ok
+test_envio_lento_al_actuador_no_bloquea_el_estado (test_servidor.PruebasServidor.test_envio_lento_al_actuador_no_bloquea_el_estado) ... ok
+test_error_se_entrega_aunque_el_cliente_siga_enviando (test_servidor.PruebasServidor.test_error_se_entrega_aunque_el_cliente_siga_enviando) ... ok
+test_fragmentos_sin_lf_no_prolongan_el_registro (test_servidor.PruebasServidor.test_fragmentos_sin_lf_no_prolongan_el_registro) ... ok
+test_fragmentos_sin_lf_no_prolongan_la_sesion_del_sensor (test_servidor.PruebasServidor.test_fragmentos_sin_lf_no_prolongan_la_sesion_del_sensor) ... ok
+test_fragmentos_y_varios_mensajes_por_bloque (test_servidor.PruebasServidor.test_fragmentos_y_varios_mensajes_por_bloque) ... ok
+test_linea_larga_cr_y_nul (test_servidor.PruebasServidor.test_linea_larga_cr_y_nul) ... ok
+test_mensaje_antes_del_registro (test_servidor.PruebasServidor.test_mensaje_antes_del_registro) ... ok
+test_mensajes_que_no_corresponden_al_rol (test_servidor.PruebasServidor.test_mensajes_que_no_corresponden_al_rol) ... ok
+test_puerto_ocupado (test_servidor.PruebasServidor.test_puerto_ocupado) ... ok
+test_rangos_limites_y_comandos_identicos (test_servidor.PruebasServidor.test_rangos_limites_y_comandos_identicos) ... ok
+test_reconexion_del_actuador_conserva_la_lectura (test_servidor.PruebasServidor.test_reconexion_del_actuador_conserva_la_lectura) ... ok
+test_registro_vencido (test_servidor.PruebasServidor.test_registro_vencido) ... ok
+test_rol_ocupado_no_afecta_al_original (test_servidor.PruebasServidor.test_rol_ocupado_no_afecta_al_original) ... ok
+test_sensor_sin_post_durante_2_s_se_cierra_y_apaga (test_servidor.PruebasServidor.test_sensor_sin_post_durante_2_s_se_cierra_y_apaga) ... ok
+test_analizar_registro (test_simuladores.PruebasSimuladores.test_analizar_registro) ... ok
+test_flujo_completo_y_apagado_al_desconectar_el_sensor (test_simuladores.PruebasSimuladores.test_flujo_completo_y_apagado_al_desconectar_el_sensor) ... ok
+test_rol_ocupado (test_simuladores.PruebasSimuladores.test_rol_ocupado) ... ok
+test_sensor_simulado_normaliza_como_el_esp32 (test_simuladores.PruebasSimuladores.test_sensor_simulado_normaliza_como_el_esp32) ... ok
+
+----------------------------------------------------------------------
+Ran 29 tests in 12.904s
+
+OK

@@ -3,11 +3,9 @@
 **Actividad:** Integración de Objetos Inteligentes con TCP/IP  
 **Asignatura:** SIS-234  
 **Grupo:** 8  
-**Estado:** diseño previo a la implementación
+**Estado:** diseño implementado
 
-Este documento presenta nuestro diseño del sistema para resolver el [enunciado original del docente](../consigna/Práctica_2.md). Reúne los diagramas y la especificación del protocolo de aplicación. Sigue el ejemplo del docente: un ESP32 con sensor, otro ESP32 con actuadores y una PC que concentra el control. Los comandos `REGISTER`, `POST` y `SET` mantienen los nombres del ejemplo.
-
-El código fuente actual corresponde a la práctica 1. Las clases nuevas y los cambios de interfaz que se muestran aquí son propuestas para la práctica 2. El [informe anterior](../historico/INFORME_P1.md) conserva los resultados y las evidencias del montaje original.
+Este documento presenta nuestro diseño del sistema para resolver el [enunciado del docente](../consigna/Práctica_2.md). Reúne los diagramas y la especificación del protocolo de aplicación. Sigue el ejemplo del docente: un ESP32 con sensor, otro ESP32 con actuadores y una PC que concentra el control. Los comandos `REGISTER`, `POST` y `SET` mantienen los nombres del ejemplo.
 
 ## 1. Arquitectura del sistema
 
@@ -53,7 +51,7 @@ flowchart LR
 
 Las líneas discontinuas representan enlaces WiFi bidireccionales. Cada ESP32 inicia una conexión TCP persistente hacia el puerto `5000` de la PC. El servidor utiliza esa misma conexión para contestar el registro y, en el caso del actuador, enviar comandos. Toda actuación procede del servidor.
 
-Las direcciones IP reproducen el esquema de referencia del docente y son ilustrativas. En el montaje se configurarán el SSID, la contraseña, la IP real de la PC y el puerto del servicio. Los clientes pueden obtener sus direcciones por DHCP; el servidor identifica su función mediante `REGISTER`.
+Las direcciones IP del diagrama siguen el esquema de referencia del docente y son de ejemplo. En el montaje se configuran el SSID, la contraseña, la IP real de la PC y el puerto del servicio. Los clientes pueden obtener sus direcciones por DHCP; el servidor identifica su función mediante `REGISTER`.
 
 ### 1.2 Distribución de responsabilidades
 
@@ -73,7 +71,7 @@ Las direcciones IP reproducen el esquema de referencia del docente y son ilustra
 | Internet | IPv4 dentro de la red local. |
 | Acceso a la red | WiFi, IEEE 802.11. |
 
-El firmware conserva C++ con Arduino-ESP32 2.0.17 y PlatformIO. El servidor se implementa en Python 3.13 con biblioteca estándar, utilizando [`socketserver.ThreadingTCPServer`](https://docs.python.org/3.13/library/socketserver.html), hilos de conexión y un bloqueo para roles y lectura. El [plan revisado](../PLAN_IMPLEMENTACION.md) detalla las etapas del firmware y sus filtros de compilación.
+El firmware usa C++ con Arduino-ESP32 2.0.17 y PlatformIO; `platformio.ini` define un entorno por placa. El servidor se implementa en Python 3.13 con biblioteca estándar, utilizando [`socketserver.ThreadingTCPServer`](https://docs.python.org/3.13/library/socketserver.html), un hilo por conexión, un bloqueo para roles y lectura, y una cola de salida por cliente para enviar fuera de ese bloqueo.
 
 ## 2. Rangos y lógica de control
 
@@ -87,7 +85,7 @@ La lógica de control vigente aplica cuatro rangos contiguos y sin solapamiento 
 | 15 < distancia ≤ 25 cm | `off` | `off` | `blink_2` | Verde a 2 Hz. |
 | distancia > 25 cm | `blink_2` | `blink_2` | `blink_2` | Lejos: los tres simultáneos a 2 Hz. |
 
-| Estado del protocolo | Estado C++ propuesto | Comportamiento |
+| Estado del protocolo | Estado C++ | Comportamiento |
 |---|---|---|
 | `off` | `EstadoLed::Apagado` | GPIO en nivel bajo. |
 | `on` | `EstadoLed::Encendido` | GPIO en nivel alto. |
@@ -98,9 +96,11 @@ Al cambiar el modo de un LED, el actuador aplica su estado inicial inmediatament
 
 Un timeout de ECHO, una lectura no finita o una distancia menor o igual que cero se comunican como `POST distance=invalid`. Al iniciar el actuador, al detectar una desconexión o al cumplirse los tiempos de ausencia de datos de la sección 6.5, los tres LEDs quedan apagados.
 
+Elegimos que la lectura inválida use el mismo estado que la falta de datos: todos apagados. En todos esos casos el sistema no tiene una distancia confiable, y la señal para quien observa es la misma: no actuar según los LEDs. El apagado es además el estado seguro, porque no muestra una cercanía que ya no se puede comprobar. La causa concreta (eco perdido, sensor desconectado o vencimiento del plazo) queda registrada en el monitor serie del actuador y en el registro del servidor.
+
 ## 3. Circuitos de los objetos inteligentes
 
-Los componentes y los pines proceden del montaje de la práctica 1, excepto TRIG del sensor, actualizado a GPIO23; ECHO permanece en GPIO18. Se reparten entre dos ESP32, alimentados por USB. Cada circuito comparte GND entre sus propios componentes; la comunicación entre objetos se realiza por WiFi.
+Los componentes se reparten entre dos ESP32, alimentados por USB: el sensor usa TRIG en GPIO23 y ECHO en GPIO18, y el actuador usa GPIO25, GPIO26 y GPIO27 para los LEDs. Cada circuito comparte GND entre sus propios componentes; la comunicación entre objetos se realiza por WiFi.
 
 ### 3.1 Objeto inteligente con sensor
 
@@ -115,7 +115,7 @@ Los componentes y los pines proceden del montaje de la práctica 1, excepto TRIG
 | HC-SR04 ECHO | R1 de 2.2 kΩ; su salida forma el nodo conectado a GPIO18. |
 | Nodo GPIO18 a GND | R2 y R3 de 2.2 kΩ en serie. |
 
-El divisor tiene 2.2 kΩ entre ECHO y el nodo de lectura, y 4.4 kΩ entre el nodo y GND. Conserva la adaptación del montaje anterior:
+El divisor tiene 2.2 kΩ entre ECHO y el nodo de lectura, y 4.4 kΩ entre el nodo y GND, para bajar el pulso de 5 V al nivel de 3.3 V del ESP32:
 
 ```text
 VGPIO18 = VECHO × (R2 + R3) / (R1 + R2 + R3)
@@ -137,7 +137,7 @@ La lectura conserva el pulso TRIG de 10 µs y el timeout de ECHO de 30000 µs de
 
 Cada LED tiene su propia resistencia. El controlador alterna los GPIO según el modo recibido; la clasificación de distancia corresponde a la PC.
 
-## 4. Diagrama de clases propuesto
+## 4. Diagrama de clases
 
 ```mermaid
 classDiagram
@@ -228,7 +228,7 @@ classDiagram
     note for ControlDistancia "Reglas ejecutadas en la PC"
 ```
 
-Las firmas representan las interfaces principales previstas. Las salidas de texto disponen de un buffer de 128 bytes: hasta 127 caracteres de contenido y un terminador C `\0`. `ClienteTcp::enviar()` agrega el `\n` al contenido; `recibir()` devuelve una línea completa sin ese delimitador. `ProtocoloAplicacion` trabaja sobre ese contenido. En el servidor, `distance=invalid` se interpreta como `NaN` y `ControlDistancia` lo convierte en los tres estados apagados.
+Las firmas corresponden a las interfaces principales del código. Las salidas de texto disponen de un buffer de 128 bytes: hasta 127 caracteres de contenido y un terminador C `\0`. `ClienteTcp::enviar()` agrega el `\n` al contenido; `recibir()` devuelve una línea completa sin ese delimitador. `ProtocoloAplicacion` trabaja sobre ese contenido. En el servidor, `distance=invalid` se interpreta como `NaN` y `ControlDistancia` lo convierte en los tres estados apagados.
 
 | Ubicación / módulo | Clases y tipos | Responsabilidad |
 |---|---|---|
@@ -387,6 +387,8 @@ ERROR reason=role_busy\n
 
 Los registros pueden llegar en cualquier orden. Los clientes completan el registro dentro de 2000 ms desde la apertura TCP. Si el servidor no recibe `REGISTER` completo dentro de ese plazo, responde `ERROR reason=not_registered` y cierra. Si el cliente no recibe `OK` dentro de ese plazo, cierra su socket y reintenta después de 2000 ms.
 
+El actuador aplica siempre el último `SET` completo que recibió. Si en una misma vuelta de su ciclo principal llegan dos comandos, el anterior se reemplaza sin aplicarse. Lo decidimos así porque cada `SET` lleva el estado completo de los tres LEDs, no un cambio relativo: el último comando ya contiene todo lo necesario. Además, un estado reemplazado a los pocos milisegundos nunca llegaría a verse, ya que el servidor envía un comando cada 250 ms.
+
 ### 6.4 Errores y validación
 
 | Situación | Respuesta del servidor | Acción |
@@ -423,20 +425,20 @@ El actuador mide la ausencia de comandos desde el último `SET` completo y váli
 
 Los temporizadores utilizan tiempo monótono local. En los ESP32, la medición, el parpadeo, la recepción y los reintentos se atienden desde el ciclo principal mediante `millis()`, manteniendo la resta sin signo para soportar su desbordamiento. Los buffers, roles y temporizadores de conexión se reinician al abrir un socket nuevo.
 
-## 7. Trazabilidad y validaciones previstas
+## 7. Trazabilidad y validaciones
 
 ### 7.1 Requerimientos funcionales
 
-| Requisito de la consigna | Elementos del diseño | Validación prevista |
+| Requisito de la consigna | Elementos del diseño | Validación |
 |---|---|---|
 | RF1: medir distancia. | Circuito del sensor, `SensorUltrasonico` y `POST`. | Comparar lecturas con una regla o cinta métrica. |
 | RF2: clasificar al menos tres rangos. | Tabla de la sección 2 y `ControlDistancia` en la PC. | Probar valores interiores y límites de 5, 15 y 25 cm, además de 50 y 100 cm en Lejos. |
 | RF3: actuar según el rango. | Circuito del actuador, `ControladorLeds` y `SET`. | Observar color, frecuencia y apagado de los demás LEDs; en Lejos, comprobar los tres parpadeos sincronizados. |
 | RF4: comunicar mediante TCP sobre WiFi. | Arquitectura, `ClienteTcp`, `ServidorTcp`, secuencias y protocolo. | Registrar ambos objetos y comprobar `POST` → clasificación → `SET`. |
 
-### 7.2 Casos para validar durante la implementación
+### 7.2 Casos de validación
 
-Estos casos definen los resultados esperados. Su ejecución y sus evidencias se documentarán cuando esté implementado el sistema distribuido.
+Estos casos definen los resultados esperados. Su ejecución y sus evidencias están en el [informe](../../INFORME.md), sección 4.
 
 | Caso | Entrada o situación | Resultado esperado |
 |---|---|---|
@@ -457,14 +459,14 @@ Estos casos definen los resultados esperados. Su ejecución y sus evidencias se 
 | PV-15 | Desconexión detectada y posterior recuperación. | Apagado, reintentos TCP cada 2000 ms (WiFi según §6.5), nuevo registro y restauración mediante un comando válido. |
 | PV-16 | Actuador se conecta con lectura reciente, inválida, antigua o inexistente. | Recibir el último estado reciente o todos apagados, según la sección 6.3. |
 
-### 7.3 Requerimientos no funcionales previstos
+### 7.3 Requerimientos no funcionales
 
-| Atributo | Criterio de aceptación | Método previsto |
+| Atributo | Criterio de aceptación | Método |
 |---|---|---|
 | Estabilidad | Al menos 10 minutos continuos sin reinicios ni bloqueos. | Observación del sistema completo y registro de eventos de los tres equipos. |
-| Exactitud | Error absoluto máximo ≤ 3 cm en el intervalo de trabajo previsto de 3 a 150 cm. | Comparar mediciones físicas que cubran los cuatro rangos, usando una referencia graduada. |
+| Exactitud | Error absoluto máximo ≤ 3 cm en el intervalo de trabajo declarado de 3 a 150 cm. | Comparar mediciones físicas que cubran los cuatro rangos, usando una referencia graduada. |
 | Tiempo de respuesta | Cambio visible del actuador en ≤ 1 s desde el cambio de distancia. | Medir de extremo a extremo: sensor → servidor → actuador, con una grabación o un instrumento de tiempo común. |
 | Frecuencia de muestreo | Al menos 2 lecturas/s; intervalo nominal de 250 ms. | Contar lecturas obtenidas y `POST` recibidos por el servidor durante una ventana de tiempo. |
 | Calidad del código | C++ simple, modular, orientado a objetos y con comentarios útiles. | Revisar responsabilidades, nombres y dependencia de las reglas respecto del hardware y la red. |
 
-El intervalo de 3 a 150 cm y los criterios anteriores quedan pendientes de verificación física para la práctica 2. Los resultados de la práctica 1 corresponden al montaje anterior y no acreditan todavía el funcionamiento distribuido.
+Los resultados de estos ensayos están en el [informe](../../INFORME.md), secciones 4 y 5.
