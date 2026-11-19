@@ -7,19 +7,24 @@ import re
 
 from .dominio import ComandoLeds, EstadoLed
 
+# Bytes de contenido por linea, sin contar el LF: 128 bytes en total por mensaje.
 MAX_CONTENIDO = 127
 
 
 class MensajeInvalido(ValueError):
-    pass
+    """Linea que no cumple el protocolo; el servidor responde invalid_message y cierra."""
 
 
 class TipoCliente(StrEnum):
+    """Rol que declara cada cliente en REGISTER."""
+
     SENSOR = "sensor"
     ACTUADOR = "actuator"
 
 
 class MotivoError(StrEnum):
+    """Valores posibles de reason en ERROR."""
+
     MENSAJE_INVALIDO = "invalid_message"
     NO_REGISTRADO = "not_registered"
     ROL_OCUPADO = "role_busy"
@@ -27,11 +32,20 @@ class MotivoError(StrEnum):
 
 @dataclass(frozen=True)
 class Mensaje:
+    """Linea ya interpretada: el comando y su valor (rol, distancia, comando o motivo)."""
+
     tipo: str
     valor: TipoCliente | float | ComandoLeds | MotivoError | None = None
 
 
 def leer_mensaje(linea: str) -> Mensaje:
+    """Valida una linea sin LF y la convierte en Mensaje.
+
+    Lanza MensajeInvalido si la linea esta vacia, supera 127 bytes, tiene caracteres
+    fuera del ASCII imprimible o no coincide con ningun comando. La distancia
+    "invalid" se devuelve como NaN; cero, negativos, coma decimal o notacion
+    cientifica se rechazan.
+    """
     if not linea or len(linea) > MAX_CONTENIDO or any(not 32 <= ord(c) <= 126 for c in linea):
         raise MensajeInvalido("Contenido no valido")
     if linea == "OK":
@@ -64,26 +78,37 @@ def leer_mensaje(linea: str) -> Mensaje:
 
 
 def crear_comando(comando: ComandoLeds) -> str:
+    """Arma la linea SET con los tres estados, sin LF."""
     if any(not isinstance(e, EstadoLed) for e in (comando.rojo, comando.amarillo, comando.verde)):
         raise MensajeInvalido("Estado LED no valido")
     return f"SET redLed={comando.rojo} yellowLed={comando.amarillo} greenLed={comando.verde}"
 
 
 def crear_error(motivo: MotivoError) -> str:
+    """Arma la linea ERROR reason=..., sin LF."""
     return f"ERROR reason={MotivoError(motivo)}"
 
 
 def codificar(linea: str) -> bytes:
+    """Valida la linea y la devuelve como bytes ASCII terminados en LF."""
     leer_mensaje(linea)
     return linea.encode("ascii") + b"\n"
 
 
 class ReceptorLineas:
+    """Reconstruye lineas completas a partir del flujo TCP de una conexion."""
+
     def __init__(self):
         self._contenido = bytearray()
         self._rechazado = False
 
     def agregar(self, bloque: bytes):
+        """Agrega un bloque recibido y entrega, una por una, las lineas completas.
+
+        Los bytes que siguen al ultimo LF quedan guardados para el proximo bloque.
+        Un byte no imprimible o mas de 127 bytes sin LF lanzan MensajeInvalido, y
+        desde entonces el receptor rechaza todo lo que llegue.
+        """
         # El generador entrega cada linea antes de validar la siguiente del bloque.
         for byte in bloque:
             if self._rechazado:
