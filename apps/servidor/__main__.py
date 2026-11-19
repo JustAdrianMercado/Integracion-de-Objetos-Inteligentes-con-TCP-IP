@@ -10,12 +10,14 @@ from .servidor import ServidorTcp
 
 
 def puerto_valido(texto):
+    """Tipo de argparse: acepta solo un numero de puerto entre 0 y 65535."""
     if not texto.isascii() or not texto.isdecimal() or not 0 <= int(texto) <= 65535:
         raise argparse.ArgumentTypeError("El puerto debe estar entre 0 y 65535")
     return int(texto)
 
 
 def ipv4_valida(texto):
+    """Tipo de argparse: acepta solo una direccion IPv4 bien escrita."""
     try:
         return str(ipaddress.IPv4Address(texto))
     except ipaddress.AddressValueError as error:
@@ -33,7 +35,8 @@ def ipv4_locales():
 
 
 def main():
-    argumentos = argparse.ArgumentParser(description="Servidor TCP de sensor y actuador ESP32")
+    """Lee los argumentos, configura el registro y atiende clientes hasta Ctrl+C."""
+    argumentos =argparse.ArgumentParser(description="Servidor TCP de sensor y actuador ESP32")
     argumentos.add_argument("--ip", type=ipv4_valida, default="0.0.0.0")
     argumentos.add_argument("--puerto", type=puerto_valido, default=5000)
     argumentos.add_argument("--registro", type=Path,
